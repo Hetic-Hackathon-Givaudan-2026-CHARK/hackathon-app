@@ -3,7 +3,7 @@
 Environnement de développement prêt pour la production basé sur les Dev Containers VS Code.  
 Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17 et IA locale via Ollama.
 
-Pour le détail et la justification des choix techniques, consultez le document d'architecture : [ADR.md](./ADR.md).
+Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
 ---
 
