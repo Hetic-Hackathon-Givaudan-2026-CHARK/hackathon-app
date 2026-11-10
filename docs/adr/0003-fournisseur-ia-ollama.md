@@ -1,6 +1,6 @@
 # 0003. Fournisseur d'IA en local avec Ollama (Llama 3.2 1B)
 
-- Statut : acceptée
+- Statut : remplacée par [0006](0006-fournisseur-ia-assistant-de-commande.md)
 - Date : 2026-11-05
 - Décideurs : Tech-Lead & Équipe
 
