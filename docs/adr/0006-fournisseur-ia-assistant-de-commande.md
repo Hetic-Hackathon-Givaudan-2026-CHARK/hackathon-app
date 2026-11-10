@@ -16,10 +16,10 @@ Le défi demande un assistant qui comprend un besoin exprimé librement (« une 
 
 ## Décision
 
-Nous choisissons l'option 2 pour le prototype : une API cloud d'un modèle frontière, avec uniquement des données fictives. L'appel reste compatible `/chat/completions` (`AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`), donc un retour vers Ollama ne touche que la configuration. Le spike « un petit modèle local comprend-il un brief ? » peut remettre ce choix en cause : un nouvel ADR remplacerait alors celui-ci.
+Nous choisissons l'option 2 pour le prototype : une API cloud d'un modèle frontière, avec uniquement des données fictives. L'appel reste compatible `/chat/completions` (`AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`), donc un retour vers Ollama ne touche que la configuration. Le spike « un petit modèle local comprend-il un brief ? » ([#7](https://github.com/Hetic-Hackathon-Givaudan-2026-CHARK/hackathon-app/issues/7)) peut remettre ce choix en cause : un nouvel ADR remplacerait alors celui-ci.
 
 ## Conséquences
 
 - Positives : choix fondé sur un essai ; changement de fournisseur sans toucher au code.
 - Négatives, à accepter : budget d'appels à prévoir ; aucune donnée réelle client dans le prototype.
-- À revoir si : le spike montre qu'un modèle local suffit, ou si Givaudan exige un hébergement en Europe. Si adopté, cet ADR remplace [0003](0003-fournisseur-ia-ollama.md).
+- À revoir si : le spike montre qu'un modèle local suffit, ou si Givaudan exige un hébergement en Europe. Cet ADR remplace [0003](0003-fournisseur-ia-ollama.md).
