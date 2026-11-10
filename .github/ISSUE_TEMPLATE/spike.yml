@@ -1,0 +1,39 @@
+name: Spike
+description: Une question à trancher avant de décider (½ ou 1 jour max)
+type: Spike
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: La question à laquelle le spike répond.
+    validations:
+      required: true
+  - type: textarea
+    id: methode
+    attributes:
+      label: Méthode
+      description: Comment on va y répondre (essai, comparaison, maquette…).
+    validations:
+      required: true
+  - type: textarea
+    id: seuil
+    attributes:
+      label: Seuil
+      description: Le critère chiffré qui fait basculer la décision.
+    validations:
+      required: true
+  - type: dropdown
+    id: duree
+    attributes:
+      label: Durée max
+      options:
+        - ½ jour
+        - 1 jour
+    validations:
+      required: true
+  - type: textarea
+    id: livrable
+    attributes:
+      label: Livrable
+      value: Une décision écrite (ADR) et, si besoin, un notebook dans `ia/`.
