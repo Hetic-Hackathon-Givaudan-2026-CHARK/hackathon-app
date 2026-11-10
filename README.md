@@ -1,7 +1,7 @@
 # Hackathon App
 
 Environnement de développement prêt pour la production basé sur les Dev Containers VS Code.  
-Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17 et IA locale via Ollama.
+Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17 et un assistant IA (API cloud compatible `/chat/completions`, voir [ADR 0006](./docs/adr/0006-fournisseur-ia-assistant-de-commande.md) ; la démo actuelle tourne encore sur Ollama en local).
 
 Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
@@ -26,7 +26,7 @@ Avant de démarrer, installez sur votre machine hôte :
 
 1. Clonez le dépôt et ouvrez le dossier dans VS Code :
    ```bash
-   git clone git@github.com:Hetic-Hackathon-Givaudan-2026-TOUKAM/hackathon-app.git
+   git clone git@github.com:Hetic-Hackathon-Givaudan-2026-CHARK/hackathon-app.git
    code hackathon-app
    ```
 2. Lorsque l'invite apparaît (ou via `F1` / `Ctrl+Shift+P`), sélectionnez **Dev Containers: Reopen in Container**.
