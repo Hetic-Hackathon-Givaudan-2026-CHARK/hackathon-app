@@ -56,6 +56,20 @@ Le service Data vit dans un dépôt séparé : [Hetic-Hackathon-Givaudan-2026-CH
 
 ## 4. Lancer l'application
 
+### Démonstration : la tranche verticale en une commande
+
+Depuis un terminal de la **machine hôte** (PowerShell ou terminal macOS/Linux), dans le dossier du dépôt, Docker Desktop et Ollama lancés :
+
+```bash
+docker compose up --build
+```
+
+Ouvrez ensuite [http://localhost:8080](http://localhost:8080). L'image construit l'API et le front ; l'API sert les deux sur ce port et se connecte à PostgreSQL, à Ollama sur l'hôte et au service Data ([ADR 0014](./docs/adr/0014-tranche-verticale-docker-compose.md)). La configuration vient de `api/.env` (section 3) ; sans ce fichier, l'application tourne avec ses replis.
+
+Au premier lancement, PostgreSQL joue `db/init/` : les comptes Léa et Marc et leurs projets de démo sont prêts.
+
+### Développement
+
 Dans un terminal du conteneur :
 
 ```bash
@@ -91,6 +105,14 @@ La démo continue ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)) :
 - sans service Data, le classement repose sur les mots du brief.
 
 Le journal de l'API indique `Assistant : N/3 explications` ou `Explications tirées des fiches`, et `/api/health` renvoie `data: "ok"` ou `"indisponible"`. Pour ne pas attendre `AI_TIMEOUT_MS` quand Ollama est arrêté, videz `AI_BASE_URL`.
+
+### Ce qui est simulé
+
+- **L'expédition** : après « Commander mon échantillon gratuit », le projet passe à « Expédié » au bout de quelques secondes (`DEMO_SHIPPING_DELAY_MS`). Il n'y a pas de logistique derrière.
+- **La connexion** : deux comptes de démo sans mot de passe (Léa, Marc). Le cloisonnement, lui, est réel : chaque requête SQL filtre par client ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-cloisonnement.md)).
+- **Les données** : clients, produits et commandes fictifs, générés à partir des CSV de l'équipe Data.
+- **L'envoi d'un brief PDF** : le bouton est affiché mais désactivé.
+- **Les replis** : sans service Data, le classement repose sur les mots du brief ; sans Ollama, les explications viennent des fiches ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)).
 
 ### Données de test
 

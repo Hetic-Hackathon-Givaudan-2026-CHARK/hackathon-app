@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import express, {
   type NextFunction,
   type Request,
@@ -52,6 +53,12 @@ app.use('/api/projects', requireSession, projects);
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Route inconnue' });
 });
+
+// Tranche verticale (ADR 0014) : une fois le front construit (`npm run build`),
+// l'API le sert elle-même, sur le même port. En développement, Vite le sert.
+if (existsSync(config.webDist)) {
+  app.use(express.static(config.webDist));
+}
 
 // Dernier middleware : JSON illisible → 400, le reste → 500 sans détail
 app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {

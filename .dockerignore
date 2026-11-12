@@ -1,0 +1,11 @@
+# Contexte de l'image (Dockerfile) : seulement le code à construire
+**/node_modules
+**/dist
+**/.env
+.git
+.scratch
+.devcontainer
+.github
+.husky
+db/data
+docs
