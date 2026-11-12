@@ -3,11 +3,154 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hackathon</title>
+    <title>Commande accompagnée · Prototype Givaudan</title>
   </head>
   <body>
-    <h1>Hackathon</h1>
-    <p id="health">Connexion à l'API…</p>
+    <header class="topbar">
+      <p class="brand">
+        Commande accompagnée <span>Prototype · Hackathon Givaudan</span>
+      </p>
+      <div id="account" hidden>
+        <span id="account-name"></span>
+        <button id="logout" type="button" class="link">
+          Changer de compte
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Connexion : comptes de démo (ADR 0011) -->
+      <section id="login" hidden>
+        <p class="eyebrow">Démonstration</p>
+        <h1>Trouvez la bonne référence, sans jargon.</h1>
+        <p class="lead">
+          Décrivez votre projet avec vos mots : nous vous proposons trois
+          références, expliquées simplement, puis un échantillon gratuit.
+        </p>
+        <div class="accounts">
+          <button type="button" class="account" data-account="lea">
+            <strong>Continuer en tant que Léa</strong>
+            <span>NutriPeak Foods · boissons protéinées</span>
+          </button>
+          <button type="button" class="account" data-account="marc">
+            <strong>Continuer en tant que Marc</strong>
+            <span>Maison Éclat · cosmétiques</span>
+          </button>
+        </div>
+        <p class="hint">
+          Comptes de démonstration, sans mot de passe. Chaque compte ne voit que
+          ses propres projets.
+        </p>
+      </section>
+
+      <!-- Barre de progression des 5 étapes -->
+      <nav id="progress" aria-label="Étapes du parcours" hidden>
+        <ol>
+          <li><button type="button" data-step="1">Besoin</button></li>
+          <li><button type="button" data-step="2">Propositions</button></li>
+          <li><button type="button" data-step="3">Affinage</button></li>
+          <li><button type="button" data-step="4">Suivi</button></li>
+          <li><button type="button" data-step="5">Échantillon</button></li>
+        </ol>
+      </nav>
+
+      <p id="notice" role="status" hidden></p>
+
+      <!-- 1. Besoin : le brief libre -->
+      <section id="step-1" hidden>
+        <p class="eyebrow">Étape 1 sur 5</p>
+        <h1>Quel est votre besoin ?</h1>
+        <p class="lead">
+          Décrivez votre projet comme vous en parleriez à un collègue : le
+          produit, le goût ou l'odeur recherchés, vos contraintes.
+        </p>
+        <p id="brief-context" class="hint" hidden></p>
+        <form id="brief-form">
+          <label for="brief">Votre brief</label>
+          <textarea
+            id="brief"
+            name="brief"
+            rows="5"
+            minlength="10"
+            required
+            placeholder="Ex. : Un arôme vanille-caramel sans sucre ajouté pour ma boisson protéinée"
+          ></textarea>
+          <div id="brief-examples" class="chips"></div>
+          <div class="actions">
+            <button
+              type="button"
+              class="secondary"
+              disabled
+              title="Bientôt disponible"
+            >
+              Ajouter un brief PDF <small>bientôt</small>
+            </button>
+            <button id="brief-submit" type="submit" class="primary">
+              Voir mes propositions
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 2. Propositions : 3 références expliquées -->
+      <section id="step-2" hidden>
+        <p class="eyebrow">Étape 2 sur 5</p>
+        <h1>Trois références pour votre projet</h1>
+        <div id="brief-recap" class="recap"></div>
+        <div id="propositions" class="cards"></div>
+        <div class="actions">
+          <button id="to-refine" type="button" class="primary">
+            Affiner cette référence
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. Affinage : 3 réglages à 3 niveaux, synthèse en temps réel -->
+      <section id="step-3" hidden>
+        <p class="eyebrow">Étape 3 sur 5</p>
+        <h1>Affinez le profil</h1>
+        <p id="refine-lead" class="lead"></p>
+        <div class="refine">
+          <form id="adjustments"></form>
+          <aside class="synthesis" aria-live="polite">
+            <h2>Votre profil en clair</h2>
+            <p id="synthesis-text"></p>
+            <ul id="synthesis-tags" class="badges"></ul>
+            <p id="save-state" class="hint"></p>
+          </aside>
+        </div>
+        <div class="actions">
+          <button id="back-to-propositions" type="button" class="secondary">
+            Revenir aux propositions
+          </button>
+          <button id="validate-brief" type="button" class="primary">
+            Valider mon brief
+          </button>
+        </div>
+      </section>
+
+      <!-- 4. Suivi : la frise du projet et « Mes projets enregistrés » -->
+      <section id="step-4" hidden>
+        <p class="eyebrow">Étape 4 sur 5</p>
+        <h1>Suivi de votre projet</h1>
+        <div id="tracking"></div>
+        <div class="list-head">
+          <h2>Mes projets enregistrés</h2>
+          <button id="new-project" type="button" class="secondary">
+            Nouveau projet
+          </button>
+        </div>
+        <ul id="project-list" class="projects"></ul>
+      </section>
+
+      <!-- 5. Échantillon gratuit ou expert -->
+      <section id="step-5" hidden>
+        <p class="eyebrow">Étape 5 sur 5</p>
+        <h1>Et maintenant ?</h1>
+        <div id="next-step"></div>
+      </section>
+    </main>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
