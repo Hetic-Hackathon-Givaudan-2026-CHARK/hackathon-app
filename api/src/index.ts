@@ -4,6 +4,7 @@ import express, {
   type Response,
 } from 'express';
 import { config } from './config.js';
+import { dataStatus } from './data.js';
 import { db } from './db.js';
 import { projects } from './projects.js';
 import {
