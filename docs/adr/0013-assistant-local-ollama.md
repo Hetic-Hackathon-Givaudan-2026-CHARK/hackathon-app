@@ -34,5 +34,4 @@ Nous choisissons l'option 2, avec Ollama et `llama3.2:1b` (`AI_BASE_URL=http://h
 
 - Positives : aucune donnée envoyée hors du poste, aucune clé ; le bon produit arrive en tête même quand le LLM se trompe ; la démo continue si Ollama est arrêté.
 - Négatives, à accepter : des explications de qualité inégale et parfois absentes ; de 10 à 30 s d'attente à l'écran 1 sur un poste sans GPU ; la qualité dépend de la machine qui fait la démo ; le LLM ne déduit plus l'univers.
-- Précisé par : [0014](0014-modele-local-qwen.md) (modèle `qwen2.5:1.5b` à la place de `llama3.2:1b`).
 - À revoir si : un poste avec GPU ou un modèle plus grand est disponible (option 3, par configuration), ou si Givaudan valide un fournisseur cloud : le LLM pourrait alors reprendre le choix des références.

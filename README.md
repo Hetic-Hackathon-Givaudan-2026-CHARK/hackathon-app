@@ -2,7 +2,7 @@
 
 Prototype de commande accompagnée pour les petites entreprises clientes de Givaudan (thématique 2) : le client décrit son besoin avec ses mots, reçoit trois références expliquées simplement, affine le profil, suit son projet, puis commande un échantillon gratuit ou demande un expert.
 
-Stack : Node 24, Express 5 (TypeScript), Vite + TypeScript sans framework, PostgreSQL 17, un assistant IA local (Ollama et `qwen2.5:1.5b` via l'API compatible `/chat/completions`, [ADR 0013](./docs/adr/0013-assistant-local-ollama.md) et [0014](./docs/adr/0014-modele-local-qwen.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md). Contrat d'API : [`openapi.yaml`](./openapi.yaml).
+Stack : Node 24, Express 5 (TypeScript), Vite + TypeScript sans framework, PostgreSQL 17, un assistant IA local (Ollama et `llama3.2:1b` via l'API compatible `/chat/completions`, [ADR 0013](./docs/adr/0013-assistant-local-ollama.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md). Contrat d'API : [`openapi.yaml`](./openapi.yaml).
 
 Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
@@ -13,7 +13,7 @@ Pour le détail et la justification des choix techniques, consultez le registre 
 - **Git**
 - **Docker Desktop** (lancé et en cours d'exécution)
 - **Visual Studio Code** avec l'extension **[Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)**
-- **[Ollama](https://ollama.com)** sur la machine hôte, avec le modèle de l'assistant : `ollama pull qwen2.5:1.5b`. Le conteneur l'appelle par `host.docker.internal:11434`.
+- **[Ollama](https://ollama.com)** sur la machine hôte, avec le modèle de l'assistant : `ollama pull llama3.2:1b`. Le conteneur l'appelle par `host.docker.internal:11434`.
 - L'**URL ngrok du service Data**, fournie par l'équipe Data.
 
 Sans Ollama ni service Data, le prototype tourne quand même (voir la section 4).
@@ -43,7 +43,7 @@ Le fichier n'est jamais commité. Les valeurs par défaut sont dans [`api/.env.e
 | ------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `DATABASE_URL`           | Connexion PostgreSQL                                                                            | `postgres://app:app@db:5432/app`       |
 | `AI_BASE_URL`            | API compatible `/chat/completions` : Ollama sur l'hôte                                          | `http://host.docker.internal:11434/v1` |
-| `AI_MODEL`               | Modèle de l'assistant                                                                           | `qwen2.5:1.5b`                         |
+| `AI_MODEL`               | Modèle de l'assistant                                                                           | `llama3.2:1b`                          |
 | `AI_API_KEY`             | Inutile avec Ollama                                                                             | vide                                   |
 | `AI_TIMEOUT_MS`          | Attente maximale du LLM, relance comprise, avant le repli sur les textes des fiches             | `30000`                                |
 | `DATA_API_URL`           | URL ngrok du service Data, sans `/docs` ni `/` final, à recopier à chaque redémarrage du tunnel | fournie par l'équipe Data              |
@@ -81,7 +81,7 @@ Pour montrer le cloisonnement ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-clo
 
 ### Comment l'assistant choisit et explique
 
-La recherche sémantique du service Data et les mots du brief classent les références de l'univers ; le LLM local rédige seulement « Pourquoi cette référence ? » pour les 3 premières ([ADR 0013](./docs/adr/0013-assistant-local-ollama.md)). Sur un poste sans GPU, comptez de 15 à 25 s après « Voir mes propositions ».
+La recherche sémantique du service Data et les mots du brief classent les références de l'univers ; le LLM local rédige seulement « Pourquoi cette référence ? » pour les 3 premières ([ADR 0013](./docs/adr/0013-assistant-local-ollama.md)). Sur un poste sans GPU, comptez de 10 à 30 s après « Voir mes propositions ».
 
 ### Si Ollama ou le service Data ne répondent pas
 
