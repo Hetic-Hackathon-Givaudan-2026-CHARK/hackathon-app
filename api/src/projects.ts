@@ -143,6 +143,7 @@ projects.post('/', async (req, res) => {
   if (typeof parsed === 'string') return badRequest(res, parsed);
 
   const { universe, propositions } = await buildPropositions(
+    clientOf(res),
     parsed.brief,
     parsed.universe,
   );
@@ -264,6 +265,7 @@ projects.post('/:id/propositions', async (req, res) => {
   }
 
   const { universe, propositions } = await buildPropositions(
+    clientOf(res),
     parsed.brief,
     parsed.universe,
   );
