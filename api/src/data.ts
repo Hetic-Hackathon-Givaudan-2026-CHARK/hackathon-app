@@ -84,7 +84,9 @@ export async function dataStatus(): Promise<'ok' | 'indisponible'> {
       headers: HEADERS,
       signal: AbortSignal.timeout(Math.min(config.dataApiTimeoutMs, 3000)),
     });
-    await response.json();
+    const health = await response.json();
+    // Un service qui répond avec un index vide ne trouvera rien
+    if (health?.indexed_documents === 0) return 'indisponible';
     return response.ok ? 'ok' : 'indisponible';
   } catch {
     return 'indisponible';
