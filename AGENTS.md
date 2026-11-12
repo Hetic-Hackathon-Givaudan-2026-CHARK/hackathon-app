@@ -11,7 +11,7 @@ Hackathon Givaudan, thématique 2 : une plateforme de commande BtoB conversation
 
 ## Règles
 
-- Chemins : API dans `api/src/`, front dans `web/src/`, schéma et données de test dans `db/init/` (joués uniquement au premier démarrage de PostgreSQL : pour les rejouer, supprimer `db/data/`).
+- Chemins : API dans `api/src/`, front dans `web/src/`, schéma et données de test dans `db/init/` (joués uniquement au premier démarrage de PostgreSQL : pour les rejouer, `npm run db:reset -w api` ou supprimer `db/data/`).
 - Le contrat d'API est `openapi.yaml`. On le modifie avant le code, dans la même PR.
 - Fins de ligne LF (`.gitattributes`). Secrets dans `api/.env`, jamais commités.
 - GitFlow : branches `feature/*` depuis `develop`, PR vers `develop`, `main` et `develop` protégées.

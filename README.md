@@ -1,7 +1,8 @@
 # Hackathon App
 
-Environnement de développement prêt pour la production basé sur les Dev Containers VS Code.  
-Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17, un assistant IA (Mistral Small via l'API compatible `/chat/completions`, [ADR 0009](./docs/adr/0009-fournisseur-llm-mistral.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md).
+Prototype de commande accompagnée pour les petites entreprises clientes de Givaudan (thématique 2) : le client décrit son besoin avec ses mots, reçoit trois références expliquées simplement, affine le profil, suit son projet, puis commande un échantillon gratuit ou demande un expert.
+
+Stack : Node 24, Express 5 (TypeScript), Vite + TypeScript sans framework, PostgreSQL 17, un assistant IA (Mistral Small via l'API compatible `/chat/completions`, [ADR 0009](./docs/adr/0009-fournisseur-llm-mistral.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md). Contrat d'API : [`openapi.yaml`](./openapi.yaml).
 
 Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
@@ -9,13 +10,10 @@ Pour le détail et la justification des choix techniques, consultez le registre 
 
 ## 1. Prérequis sur la machine hôte
 
-Avant de démarrer, installez sur votre machine hôte :
-
 - **Git**
 - **Docker Desktop** (lancé et en cours d'exécution)
 - **Visual Studio Code** avec l'extension **[Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)**
-- Une **clé d'API Mistral** à copier dans `api/.env` (`AI_API_KEY`), et l'URL du service Data (`DATA_API_URL`) fournie par l'équipe Data.
-- Facultatif, en repli hors ligne : **Ollama** avec `ollama run llama3.2:1b`.
+- Une **clé d'API Mistral** (https://console.mistral.ai) et l'**URL ngrok du service Data**, fournie par l'équipe Data. Sans elles, le prototype tourne quand même avec des propositions figées (voir la section 4).
 
 ---
 
@@ -27,48 +25,105 @@ Avant de démarrer, installez sur votre machine hôte :
    code hackathon-app
    ```
 2. Lorsque l'invite apparaît (ou via `F1` / `Ctrl+Shift+P`), sélectionnez **Dev Containers: Reopen in Container**.
-3. VS Code démarre automatiquement la stack Docker (`compose.yaml`) et s'y connecte.
-4. À la création, les dépendances `npm` et le fichier de configuration `api/.env` sont initialisés automatiquement.
+3. VS Code démarre la stack Docker (`compose.yaml`) et s'y connecte.
+4. À la création, les dépendances `npm` sont installées et `api/.env` est copié depuis `api/.env.example`.
+
+Tout se fait dans le dev container, jamais sur l'hôte Windows.
 
 ---
 
-## 3. Lancer l'application
+## 3. Configurer `api/.env`
 
-Ouvrez un terminal dans VS Code (dans le conteneur) et lancez :
+Le fichier n'est jamais commité. Les valeurs par défaut sont dans [`api/.env.example`](./api/.env.example).
+
+| Variable                 | Rôle                                                                                         | Valeur pour la démo              |
+| ------------------------ | -------------------------------------------------------------------------------------------- | -------------------------------- |
+| `DATABASE_URL`           | Connexion PostgreSQL                                                                         | `postgres://app:app@db:5432/app` |
+| `AI_BASE_URL`            | API compatible `/chat/completions`                                                           | `https://api.mistral.ai/v1`      |
+| `AI_MODEL`               | Modèle de l'assistant                                                                        | `mistral-small-latest`           |
+| `AI_API_KEY`             | Clé Mistral                                                                                  | votre clé                        |
+| `AI_TIMEOUT_MS`          | Délai maximal d'un appel au LLM, avant le repli sur les propositions figées                  | `15000`                          |
+| `DATA_API_URL`           | URL ngrok du service Data, à recopier à chaque redémarrage du tunnel                         | fournie par l'équipe Data        |
+| `DATA_API_TIMEOUT_MS`    | Délai maximal d'un appel au service Data                                                     | `8000`                           |
+| `DEMO_SHIPPING_DELAY_MS` | Simulation de démo : délai avant qu'un échantillon commandé passe à « expédié » (0 = jamais) | `6000`                           |
+
+Le service Data vit dans un dépôt séparé : [Hetic-Hackathon-Givaudan-2026-CHARK/equipe10](https://github.com/Hetic-Hackathon-Givaudan-2026-CHARK/equipe10). Son contrat est copié dans [`docs/contrats/data-api.openapi.json`](./docs/contrats/data-api.openapi.json).
+
+---
+
+## 4. Lancer l'application
+
+Dans un terminal du conteneur :
 
 ```bash
 npm run dev
 ```
 
-Cette commande exécute simultanément l'API Express et le frontend Vite.
-
-### Points d'accès :
-
 - **Interface Web :** [http://localhost:5173](http://localhost:5173)
-- **API Backend :** [http://localhost:3000](http://localhost:3000)
-- **Base de données PostgreSQL :** `localhost:5432` (User: `app`, Mot de passe: `app`, Base: `app`)
+- **API :** [http://localhost:3000](http://localhost:3000)
+- **PostgreSQL :** `localhost:5432` (utilisateur `app`, mot de passe `app`, base `app`)
+
+Sous Windows, les changements de fichiers ne sont pas toujours détectés dans le conteneur : après un `git pull` ou un changement de branche, arrêtez puis relancez `npm run dev`.
+
+### Parcours de démo
+
+1. Ouvrez [http://localhost:5173](http://localhost:5173) et choisissez **Continuer en tant que Léa** (NutriPeak Foods, `CL-002`).
+2. **Besoin** : décrivez le projet, par exemple « Un arôme vanille-caramel sans sucre ajouté pour ma boisson protéinée ».
+3. **Propositions** : trois références avec leur pourcentage de correspondance, leurs badges, « En clair » et « Pourquoi cette référence ? ». Choisissez-en une.
+4. **Affinage** : trois réglages (frais ou chaud, douceur, naturalité), la synthèse se met à jour tout de suite.
+5. **Suivi** : la frise du projet et « Mes projets enregistrés ».
+6. **Échantillon** : « Commander mon échantillon gratuit ». La frise passe à « expédié » après quelques secondes : c'est une simulation de démo, il n'y a pas de logistique derrière.
+
+Pour montrer le cloisonnement ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-cloisonnement.md)) : **Changer de compte**, puis **Continuer en tant que Marc** (Maison Éclat, `CL-001`). Sa liste de projets est différente, et aucun projet de Léa n'est accessible.
+
+### Si Mistral ou le service Data ne répondent pas
+
+La démo continue : l'API sert trois références figées du catalogue ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)). Le journal de l'API indique `Propositions de l'assistant` ou `Propositions figées`, et `/api/health` renvoie `data: "ok"` ou `"indisponible"`. Pour un repli immédiat, sans attendre `AI_TIMEOUT_MS`, videz `AI_BASE_URL`.
+
+### Données de test
+
+Le schéma et le seed de `db/init/` ne sont joués qu'au premier démarrage de PostgreSQL. Pour repartir d'une base propre avant une démo (efface tous les projets créés) :
+
+```bash
+npm run db:reset -w api
+```
+
+Le seed est généré à partir des CSV de l'équipe Data, pour que les identifiants (`CL-…`, `PR-…`) soient les mêmes des deux côtés :
+
+```bash
+git clone https://github.com/Hetic-Hackathon-Givaudan-2026-CHARK/equipe10 .scratch/equipe10
+npm run db:generate-seed -w api
+```
 
 ---
 
-## 4. Vérifier la chaîne complète
+## 5. Vérifier la chaîne complète
 
-1. **Vérifier l'API :** Ouvrez [http://localhost:3000/api/health](http://localhost:3000/api/health) (doit répondre `{"status":"ok"}`).
-2. **Vérifier PostgreSQL :** Ouvrez [http://localhost:3000/api/db](http://localhost:3000/api/db) (retourne les données de test insérées à l'initialisation).
-3. **Vérifier l'IA :** Ouvrez [http://localhost:5173](http://localhost:5173), saisissez une question dans le champ de texte et cliquez sur **Envoyer** : la réponse d'Ollama s'affiche en direct.
+1. **API, base et service Data :** [http://localhost:3000/api/health](http://localhost:3000/api/health) doit répondre `{"status":"ok", "db": "…", "data": "ok"}` (`"indisponible"` si le tunnel ngrok est coupé).
+2. **Session et cloisonnement :**
+   ```bash
+   curl -c lea.txt -X POST localhost:3000/api/session -H 'Content-Type: application/json' -d '{"account":"lea"}'
+   curl -b lea.txt localhost:3000/api/projects     # les 3 projets de démo de Léa
+   curl -c marc.txt -X POST localhost:3000/api/session -H 'Content-Type: application/json' -d '{"account":"marc"}'
+   curl -b marc.txt localhost:3000/api/projects/0b6f3a52-8c1d-4e7a-9f20-000000000201   # projet de Léa : 404
+   ```
+3. **Assistant :** déroulez le parcours de démo ci-dessus et regardez le journal de l'API.
 
 ---
 
-## 5. Workflow de contribution (GitFlow & Qualité)
+## 6. Workflow de contribution (GitFlow & Qualité)
 
 - **Branche principale de travail :** `develop`
-- **Branches protégées :** Les push directs sur `main` et `develop` sont refusés par les règles du dépôt.
+- **Branches protégées :** les push directs sur `main` et `develop` sont refusés par les règles du dépôt.
 - **Pour toute contribution :**
   1. Créez une branche dédiée : `git checkout -b feature/ma-fonctionnalite develop`
-  2. Validez le code localement :
+  2. Si l'API change, modifiez d'abord `openapi.yaml`, dans la même PR.
+  3. Validez le code localement :
      ```bash
      npm run lint
      npm run format:check
+     npm run build
      ```
-  3. Committez vos modifications (le hook Husky `pre-commit` bloque tout code non conforme).
-  4. Poussez votre branche et ouvrez une Pull Request vers `develop`.
-  5. La PR ne peut être fusionnée que si le check CI (`qualite`) est au vert.
+  4. Committez vos modifications (le hook Husky `pre-commit` bloque tout code non conforme).
+  5. Poussez votre branche et ouvrez une Pull Request vers `develop`.
+  6. La PR ne peut être fusionnée que si le check CI (`qualite`) est au vert.
