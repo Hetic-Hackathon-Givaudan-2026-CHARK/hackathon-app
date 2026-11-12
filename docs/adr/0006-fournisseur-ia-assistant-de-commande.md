@@ -1,6 +1,6 @@
 # 0006. Fournisseur d'IA de l'assistant de commande : API cloud ou modèle local
 
-- Statut : acceptée
+- Statut : remplacée par [0013](0013-assistant-local-ollama.md)
 - Date : 2026-11-10
 - Décideurs : l'équipe
 

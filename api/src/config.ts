@@ -10,11 +10,13 @@ const env = process.env;
 export const config = {
   port: Number(env.PORT ?? 3000),
   databaseUrl: env.DATABASE_URL,
-  // Assistant (ADR 0009) : n'importe quelle API compatible /chat/completions
+  // Assistant (ADR 0013) : Ollama en local, ou toute API compatible
+  // /chat/completions. AI_TIMEOUT_MS borne l'attente totale, relance comprise.
   aiBaseUrl: env.AI_BASE_URL?.replace(/\/+$/, ''),
   aiModel: env.AI_MODEL,
   aiApiKey: env.AI_API_KEY ?? '',
-  aiTimeoutMs: Number(env.AI_TIMEOUT_MS ?? 15000),
+  aiTimeoutMs: Number(env.AI_TIMEOUT_MS ?? 30000),
+  aiDebug: env.AI_DEBUG === '1',
   // Service RAG de l'équipe Data (ADR 0008)
   dataApiUrl: env.DATA_API_URL?.replace(/\/+$/, ''),
   dataApiTimeoutMs: Number(env.DATA_API_TIMEOUT_MS ?? 8000),
