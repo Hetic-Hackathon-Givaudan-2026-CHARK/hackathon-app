@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Givaudan Assistant · Prototype</title>
+  </head>
+  <body>
+    <!-- En-tête et progression (wireframes « Maquettes Givaudan G10 ») -->
+    <header class="topbar">
+      <div class="topbar-row">
+        <p class="brand">Givaudan Assistant</p>
+        <p class="tagline">
+          Catalogue saveurs &amp; parfums · Petites entreprises
+        </p>
+        <div id="account" hidden>
+          <span id="account-name"></span>
+          <button id="logout" type="button" class="link">
+            Changer de compte
+          </button>
+        </div>
+      </div>
+      <nav id="progress" aria-label="Étapes du parcours" hidden>
+        <ol>
+          <li>
+            <button type="button" data-step="1">
+              <span class="num">1</span> Besoin
+            </button>
+          </li>
+          <li>
+            <button type="button" data-step="2">
+              <span class="num">2</span> Propositions
+            </button>
+          </li>
+          <li>
+            <button type="button" data-step="3">
+              <span class="num">3</span> Affinage
+            </button>
+          </li>
+          <li>
+            <button type="button" data-step="4">
+              <span class="num">4</span> Suivi
+            </button>
+          </li>
+          <li>
+            <button type="button" data-step="5">
+              <span class="num">5</span> Échantillon / expert
+            </button>
+          </li>
+        </ol>
+      </nav>
+    </header>
+
+    <main>
+      <p id="notice" role="status" hidden></p>
+
+      <!-- Connexion : comptes de démo (ADR 0011), accueil de la maquette haute fidélité -->
+      <section id="login" hidden>
+        <h1>
+          Je suis l'assistant Givaudan,<br />
+          je suis là pour vous éclairer !
+        </h1>
+        <p class="lead">
+          Décrivez votre projet avec vos mots : je vous propose trois références
+          expliquées simplement, puis un échantillon gratuit.
+        </p>
+        <div class="accounts">
+          <button type="button" class="account" data-account="lea">
+            <strong>Continuer en tant que Léa</strong>
+            <span>NutriPeak Foods · boissons protéinées</span>
+          </button>
+          <button type="button" class="account" data-account="marc">
+            <strong>Continuer en tant que Marc</strong>
+            <span>Maison Éclat · cosmétiques</span>
+          </button>
+        </div>
+        <p class="hint">
+          Comptes de démonstration, sans mot de passe. Chaque compte ne voit que
+          ses propres projets.
+        </p>
+      </section>
+
+      <!-- 1. Préciser le besoin -->
+      <section id="step-1" hidden>
+        <form id="brief-form" class="step">
+          <p class="eyebrow">01 / Préciser le besoin</p>
+          <h1>Quel arôme ou parfum imaginez-vous aujourd'hui ?</h1>
+          <p class="lead">
+            Décrivez votre idée avec vos mots. Je vous aide à trouver la bonne
+            référence.
+          </p>
+          <p id="brief-context" class="hint" hidden></p>
+          <label for="brief" class="label">Votre besoin</label>
+          <div class="field">
+            <textarea
+              id="brief"
+              name="brief"
+              rows="3"
+              minlength="10"
+              required
+              aria-describedby="brief-help"
+              placeholder="Ex. : Un arôme vanille-caramel sans sucre ajouté pour ma boisson protéinée"
+            ></textarea>
+            <p id="brief-help" class="hint">
+              Application, sensation recherchée, contraintes…
+            </p>
+          </div>
+          <div class="pdf-row">
+            <button type="button" class="secondary" disabled>
+              + Ajouter un brief PDF
+            </button>
+            <span class="hint">PDF · 10 Mo maximum · bientôt disponible</span>
+          </div>
+          <p class="label">Pour vous inspirer</p>
+          <div id="brief-examples" class="chips"></div>
+          <p class="hint">
+            Vous pourrez affiner les propositions à la prochaine étape.
+          </p>
+          <div class="actionbar">
+            <span class="hint">Étape 1 sur 5</span>
+            <button id="brief-submit" type="submit" class="primary">
+              Voir mes propositions →
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 2. Visualiser les propositions et comprendre -->
+      <section id="step-2" class="step" hidden>
+        <p class="eyebrow">02 / Visualiser &amp; comprendre</p>
+        <h1>Des propositions pour votre brief</h1>
+        <p id="brief-recap" class="lead"></p>
+        <p id="universe-line" class="hint"></p>
+        <div class="split">
+          <ul id="proposition-list" class="picker"></ul>
+          <article
+            id="proposition-detail"
+            class="box detail"
+            aria-live="polite"
+          ></article>
+        </div>
+        <div class="actionbar">
+          <button id="edit-brief" type="button" class="back">
+            ← Modifier mon besoin
+          </button>
+          <button id="to-refine" type="button" class="primary">
+            Affiner cette proposition →
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. Affiner après les propositions -->
+      <section id="step-3" class="step" hidden>
+        <p class="eyebrow">03 / Affiner la proposition</p>
+        <h1>Ajustons le profil à votre idée</h1>
+        <p id="refine-lead" class="lead"></p>
+        <div class="split refine">
+          <div class="box">
+            <h2>Vos préférences</h2>
+            <p id="refine-hint" class="hint"></p>
+            <div id="sliders"></div>
+          </div>
+          <aside class="box box-soft synthesis" aria-live="polite">
+            <h2>Votre brief ajusté</h2>
+            <p class="eyebrow">Synthèse en temps réel</p>
+            <p id="synthesis-base" class="hint"></p>
+            <ul id="synthesis-lines"></ul>
+            <p id="save-state" class="hint"></p>
+          </aside>
+        </div>
+        <p class="hint">
+          Vos préférences précisent le brief, sans modifier une formule finale.
+        </p>
+        <div class="actionbar">
+          <button id="back-to-propositions" type="button" class="back">
+            ← Revoir les propositions
+          </button>
+          <button id="validate-brief" type="button" class="primary">
+            Valider mon brief et suivre →
+          </button>
+        </div>
+      </section>
+
+      <!-- 4. Suivre sa demande -->
+      <section id="step-4" class="step" hidden>
+        <p class="eyebrow">04 / Suivre sa demande</p>
+        <h1>Votre projet, étape par étape</h1>
+        <p id="tracking-lead" class="lead"></p>
+        <div id="tracking"></div>
+        <div class="list-head">
+          <h2>Mes projets enregistrés</h2>
+          <button id="new-project" type="button" class="link">
+            + Nouveau projet
+          </button>
+        </div>
+        <table class="projects">
+          <thead class="visually-hidden">
+            <tr>
+              <th scope="col">Projet</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody id="project-list"></tbody>
+        </table>
+        <div class="actionbar">
+          <button id="back-to-refine" type="button" class="back">
+            ← Affiner mon brief
+          </button>
+          <button id="tracking-action" type="button" class="primary">
+            Choisir la prochaine étape →
+          </button>
+        </div>
+      </section>
+
+      <!-- 5. Recevoir un échantillon ou contacter un expert -->
+      <section id="step-5" class="step" hidden>
+        <p class="eyebrow">05 / Passer à la prochaine étape</p>
+        <h1>Testez votre idée ou parlons-en</h1>
+        <p id="next-lead" class="lead"></p>
+        <div id="next-step"></div>
+        <p id="next-footnote" class="hint">
+          Les coordonnées et l'adresse de livraison seront confirmées à l'étape
+          suivante.
+        </p>
+        <div class="actionbar">
+          <button id="back-to-tracking" type="button" class="back">
+            ← Retour au suivi de ma demande
+          </button>
+          <span class="hint">Étape 5 sur 5</span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

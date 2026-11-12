@@ -1,0 +1,324 @@
+openapi: 3.1.0
+info:
+  title: API de commande conversationnelle Givaudan
+  version: 0.2.0
+  description: >
+    Contrat d'API du prototype (thématique 2), aligné sur les wireframes Figma
+    « Maquettes Givaudan G10 » (5 étapes : besoin, propositions, affinage,
+    suivi, échantillon ou expert). Toutes les routes sont
+    implémentées dans api/src/. Voir docs/adr/0005-contrat-api-openapi-first.md.
+servers:
+  - url: http://localhost:3000
+security:
+  - session: []
+paths:
+  /api/health:
+    get:
+      summary: Vérifie que l'API, la base et le service Data répondent (existe)
+      security: []
+      responses:
+        '200':
+          description: Service opérationnel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  db: { type: string }
+                  data:
+                    type: string
+                    description: État du service RAG de l'équipe Data (ADR 0008)
+                    enum: [ok, indisponible]
+  /api/session:
+    post:
+      summary: Ouvre une session pour un compte de démo (ADR 0011)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account]
+              properties:
+                account: { type: string, enum: [lea, marc] }
+      responses:
+        '204':
+          description: Session ouverte (cookie HttpOnly `sid`)
+        '400':
+          description: Compte inconnu
+    delete:
+      summary: Ferme la session
+      responses:
+        '204':
+          description: Session fermée
+  /api/me:
+    get:
+      summary: Renvoie le client connecté
+      responses:
+        '200':
+          description: Client connecté
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '401':
+          description: Pas de session
+  /api/projects:
+    get:
+      summary: Liste les projets du client connecté (écran 4, « Mes projets enregistrés »)
+      responses:
+        '200':
+          description: Projets du client, du plus récent au plus ancien
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProjectSummary' }
+        '401':
+          description: Pas de session
+    post:
+      summary: Crée un projet à partir d'un brief et renvoie les propositions (écrans 1 → 2)
+      description: >
+        L'API interroge le service Data (ADR 0008), puis le LLM (ADR 0009), qui
+        détecte l'univers, choisit au plus 3 références du catalogue et explique
+        son choix. Seules les références existantes sont renvoyées. Si le LLM
+        échoue, l'API renvoie 3 références figées du catalogue de l'univers
+        (ADR 0012).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BriefRequest' }
+      responses:
+        '201':
+          description: Projet créé (statut `draft`) avec ses propositions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '400':
+          description: Brief manquant
+        '401':
+          description: Pas de session
+        '502':
+          description: Aucune proposition exploitable (LLM en échec et catalogue de l'univers vide)
+  /api/projects/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      summary: Renvoie un projet du client connecté
+      responses:
+        '200':
+          description: Projet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401':
+          description: Pas de session
+        '404':
+          description: Projet inconnu pour ce client
+    patch:
+      summary: Choisit la référence, enregistre les réglages et valide le brief (écrans 2 → 3 → 4)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectUpdate' }
+      responses:
+        '200':
+          description: Projet mis à jour
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '400':
+          description: Référence absente des propositions, ou transition de statut interdite
+        '401':
+          description: Pas de session
+        '404':
+          description: Projet inconnu pour ce client
+  /api/projects/{id}/propositions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      summary: Relance les propositions après « Modifier mon besoin » (écran 2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BriefRequest' }
+      responses:
+        '200':
+          description: Projet avec ses nouvelles propositions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '400':
+          description: Brief manquant, ou brief déjà validé
+        '401':
+          description: Pas de session
+        '404':
+          description: Projet inconnu pour ce client
+  /api/projects/{id}/next-step:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      summary: Commande l'échantillon gratuit ou demande un expert (écran 5)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [choice]
+              properties:
+                choice: { type: string, enum: [sample, expert] }
+      responses:
+        '200':
+          description: Projet passé en `sample_preparing` ou `expert_requested`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '400':
+          description: Brief pas encore validé
+        '401':
+          description: Pas de session
+        '404':
+          description: Projet inconnu pour ce client
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: Cookie HttpOnly posé par POST /api/session (ADR 0011)
+  parameters:
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Universe:
+      type: string
+      description: Parfums (fragrance) et arômes (flavor) sont deux parcours distincts (ADR 0010).
+      enum: [fragrance, flavor]
+    Client:
+      type: object
+      required: [id, name, company]
+      properties:
+        id: { type: string, example: CL-002 }
+        name: { type: string, example: Léa }
+        company: { type: string, example: NutriPeak Foods }
+    BriefRequest:
+      type: object
+      required: [brief]
+      properties:
+        brief:
+          type: string
+          minLength: 10
+          example: Un arôme vanille-caramel sans sucre ajouté pour ma boisson protéinée
+        universe:
+          description: Facultatif. Sans valeur, l'assistant le déduit du brief.
+          $ref: '#/components/schemas/Universe'
+    Product:
+      type: object
+      required: [id, reference, name, universe]
+      properties:
+        id: { type: string, example: PR-007 }
+        reference: { type: string, example: FLV-203 }
+        name: { type: string, example: Vanille Amande }
+        universe: { $ref: '#/components/schemas/Universe' }
+        family: { type: string, example: Gourmand }
+        profile: { type: string, example: 'vanille crémeuse, amande, biscuit' }
+        application: { type: string, example: shake protéiné }
+        badges:
+          type: array
+          items: { type: string }
+          example: [Kosher, Natural]
+    Proposition:
+      type: object
+      description: Une carte de l'écran 2
+      required: [product, matchScore, summary, reason]
+      properties:
+        product: { $ref: '#/components/schemas/Product' }
+        matchScore: { type: integer, minimum: 0, maximum: 100, example: 98 }
+        summary:
+          type: string
+          description: Ligne courte sous le nom (« Agrumes · fraîcheur pétillante »)
+        profileHighlight:
+          type: string
+          description: Profil en une phrase (« Une tête hespéridée »)
+        glossary:
+          type: array
+          description: Termes techniques expliqués (bloc « En clair »)
+          items:
+            type: object
+            required: [term, plain]
+            properties:
+              term: { type: string, example: hespéridée }
+              plain:
+                {
+                  type: string,
+                  example: 'Une sensation fraîche évoquant les agrumes.',
+                }
+        reason:
+          type: string
+          description: Bloc « Pourquoi cette référence ? »
+    Adjustments:
+      type: object
+      description: Les trois réglages de l'écran 3, trois niveaux chacun
+      properties:
+        temperature: { type: string, enum: [fresh, balanced, warm] }
+        sweetness: { type: string, enum: [discreet, moderate, pronounced] }
+        naturalness: { type: string, enum: [none, moderate, high] }
+    ProjectStatus:
+      type: string
+      description: >
+        Frise de l'écran 4. draft = brouillon ; brief_validated = brief validé ;
+        sample_preparing = échantillon en préparation ; shipped = expédié ;
+        testing = test en cours ; expert_requested = expert demandé.
+      enum:
+        [
+          draft,
+          brief_validated,
+          sample_preparing,
+          shipped,
+          testing,
+          expert_requested,
+        ]
+    ProjectSummary:
+      type: object
+      description: Une ligne de « Mes projets enregistrés »
+      required: [id, name, status, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Projet Boisson protéinée 2027 }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        updatedAt: { type: string, format: date-time }
+    Project:
+      allOf:
+        - $ref: '#/components/schemas/ProjectSummary'
+        - type: object
+          required: [brief, universe, propositions]
+          properties:
+            brief: { type: string }
+            universe: { $ref: '#/components/schemas/Universe' }
+            propositions:
+              type: array
+              maxItems: 3
+              items: { $ref: '#/components/schemas/Proposition' }
+            selectedProductId: { type: string, example: PR-007 }
+            adjustments: { $ref: '#/components/schemas/Adjustments' }
+            estimatedDelivery: { type: string, format: date }
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        selectedProductId:
+          type: string
+          description: Doit faire partie des propositions du projet
+        adjustments: { $ref: '#/components/schemas/Adjustments' }
+        status:
+          type: string
+          description: 'Seule transition permise ici : draft → brief_validated'
+          enum: [brief_validated]

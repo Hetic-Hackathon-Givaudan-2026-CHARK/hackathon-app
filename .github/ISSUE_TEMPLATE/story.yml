@@ -1,0 +1,27 @@
+name: Story
+description: Un besoin utilisateur (écrit par le Product)
+type: Feature
+body:
+  - type: textarea
+    id: besoin
+    attributes:
+      label: Besoin
+      description: 'En tant que <qui>, je veux <quoi> afin de <pourquoi>.'
+    validations:
+      required: true
+  - type: textarea
+    id: criteres
+    attributes:
+      label: Critères d'acceptation
+      description: "Une case par critère, vérifiable par quelqu'un d'autre que l'auteur. Forme suggérée : Étant donné …, quand …, alors …"
+      value: '- [ ] '
+    validations:
+      required: true
+  - type: textarea
+    id: hors-perimetre
+    attributes:
+      label: Hors périmètre
+  - type: input
+    id: maquette
+    attributes:
+      label: Maquette (lien Figma)
