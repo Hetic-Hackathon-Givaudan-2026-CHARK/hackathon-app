@@ -28,4 +28,5 @@ Nous choisissons l'option 1.
 
 - Positives : une seule porte d'entrée à sécuriser ; le front peut avancer sur des réponses simulées pendant que l'API se branche ; les secrets ne quittent pas le serveur.
 - Négatives, à accepter : l'API Express porte plus de logique (orchestration, filtrage par client) ; pas d'URL publique stable.
+- Précisé par : [0014](0014-tranche-verticale-docker-compose.md) (la tranche verticale se lance avec `docker compose up`, sur le port 8080).
 - À revoir si : le prototype doit être testé par des utilisateurs externes sans nous (il faudrait alors un hébergement géré et l'authentification de [0011](0011-comptes-de-demo-et-cloisonnement.md) en version réelle).

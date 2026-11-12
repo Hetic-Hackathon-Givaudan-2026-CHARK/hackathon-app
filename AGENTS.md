@@ -4,8 +4,11 @@ Hackathon Givaudan, thématique 2 : une plateforme de commande BtoB conversation
 
 ## Lancer
 
-- Tout se fait dans le dev container, jamais sur l'hôte Windows (`node_modules` y contient des binaires Linux).
-- `npm run dev` : API (port 3000) et front Vite (port 5173).
+- Tout se fait dans le dev container, jamais sur l'hôte Windows (`node_modules` y contient des binaires Linux). Seule exception : `docker compose up`.
+- `npm run dev` : API (port 3000) et front Vite (port 5173), pour développer.
+- `docker compose up --build`, depuis l'hôte : la tranche verticale complète sur http://localhost:8080, l'API servant le front construit (ADR 0014). Configuration lue dans `api/.env`.
+- `curl -s localhost:3000/api/health` : `db` et `data` (`ok` ou `indisponible`). L'assistant appelle Ollama sur l'hôte (`llama3.2:1b`, ADR 0013).
+- `npm run db:reset -w api` : remet les comptes et projets de démo (efface la base de dev).
 - Avant de committer : `npm run lint` puis `npm run format:check`. Le hook `pre-commit` (Husky + lint-staged) et la CI (job `qualite`) refusent le code non conforme.
 - `npm run build` doit passer : la CI le lance.
 
