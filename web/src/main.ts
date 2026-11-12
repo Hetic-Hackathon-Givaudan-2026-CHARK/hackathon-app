@@ -1,6 +1,7 @@
-// Parcours du prototype (ADR 0007) : un écran de connexion, puis 5 étapes dans
-// des <section> affichées une à une. Pas de framework : l'état tient dans
-// `state`, et chaque étape a une fonction qui redessine sa section.
+// Parcours du prototype (ADR 0007), aligné sur les wireframes « Maquettes
+// Givaudan G10 » : un écran de connexion, puis 5 étapes dans des <section>
+// affichées une à une. Pas de framework : l'état tient dans `state`, et chaque
+// étape a une fonction qui redessine sa section.
 import './style.css';
 import {
   api,
@@ -17,9 +18,12 @@ import {
   DEFAULT_ADJUSTMENTS,
   EXAMPLES,
   formatDate,
+  levelIndex,
+  PROFILE_LABELS,
   SETTINGS,
+  type Setting,
   STATUS_LABELS,
-  synthesis,
+  synthesisLines,
   TIMELINE,
   UNIVERSE_LABELS,
 } from './labels';
@@ -31,6 +35,8 @@ const state = {
   project: null as Project | null,
   projects: [] as ProjectSummary[],
   step: 1 as Step,
+  // Référence affichée dans le détail de l'écran 2 (pas encore enregistrée)
+  viewedId: null as string | null,
 };
 
 // --- Petits outils DOM ---
@@ -57,11 +63,13 @@ function h<K extends keyof HTMLElementTagNameMap>(
       element.setAttribute(key, String(value));
     }
   }
-  element.append(
-    ...children.filter((child): child is Node | string => Boolean(child)),
-  );
+  element.append(...nodes(children));
   return element;
 }
+
+// Retire les enfants vides (false, null, undefined) avant de les insérer
+const nodes = (children: Child[]): (Node | string)[] =>
+  children.filter((child): child is Node | string => Boolean(child));
 
 const notice = $('#notice');
 
@@ -97,13 +105,16 @@ async function run(
       );
     }
   } finally {
-    if (button?.isConnected) {
+    // Si l'étape a redessiné le bouton entre-temps, on ne le touche plus
+    if (button?.classList.contains('is-busy')) {
       button.disabled = false;
       button.textContent = label;
       button.classList.remove('is-busy');
     }
   }
 }
+
+const clicked = (event: Event) => event.currentTarget as HTMLButtonElement;
 
 // --- Navigation ---
 
@@ -118,6 +129,8 @@ const selected = (): Proposition | undefined =>
     (proposition) =>
       proposition.product.id === state.project?.selectedProductId,
   );
+const productLabel = (proposition: Proposition) =>
+  `${proposition.product.name} ${proposition.product.reference}`;
 
 // Une étape n'est accessible que si le projet en cours le permet
 function reachable(step: Step): boolean {
@@ -176,6 +189,14 @@ function recall(): { id?: string; step?: Step } {
   }
 }
 
+function forget() {
+  try {
+    sessionStorage.removeItem('parcours');
+  } catch {
+    // Stockage indisponible : rien à effacer
+  }
+}
+
 // --- Connexion ---
 
 function showLogin(message = '') {
@@ -213,7 +234,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
 $('#logout').addEventListener('click', () =>
   run(null, '', async () => {
     await api('DELETE', '/session');
-    sessionStorage.removeItem('parcours');
+    forget();
     showLogin();
   }),
 );
@@ -222,9 +243,8 @@ progressButtons.forEach((button, index) =>
   button.addEventListener('click', () => show((index + 1) as Step)),
 );
 
-// --- Étape 1 : le besoin ---
+// --- Étape 1 : préciser le besoin ---
 
-const briefForm = $<HTMLFormElement>('#brief-form');
 const briefField = $<HTMLTextAreaElement>('#brief');
 const briefSubmit = $<HTMLButtonElement>('#brief-submit');
 
@@ -234,8 +254,8 @@ function renderBrief() {
   const draft = isDraft() ? state.project : null;
   briefField.value = draft?.brief ?? '';
   briefSubmit.textContent = draft
-    ? 'Relancer les propositions'
-    : 'Voir mes propositions';
+    ? 'Relancer les propositions →'
+    : 'Voir mes propositions →';
   const context = $('#brief-context');
   context.hidden = draft === null;
   context.replaceChildren(
@@ -247,19 +267,19 @@ function renderBrief() {
     ),
   );
   $('#brief-examples').replaceChildren(
-    h('span', {}, 'Exemples :'),
     ...EXAMPLES.map((example) =>
       h(
         'button',
         {
           type: 'button',
           class: 'chip',
+          title: example.brief,
           click: () => {
-            briefField.value = example;
+            briefField.value = example.brief;
             briefField.focus();
           },
         },
-        example,
+        example.label,
       ),
     ),
   );
@@ -271,7 +291,7 @@ function startNewProject() {
   briefField.focus();
 }
 
-briefForm.addEventListener('submit', (event) => {
+$<HTMLFormElement>('#brief-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const brief = briefField.value.trim();
   const draft = isDraft() ? state.project : null;
@@ -281,25 +301,41 @@ briefForm.addEventListener('submit', (event) => {
           brief,
         })
       : await api<Project>('POST', '/projects', { brief });
+    state.viewedId = null;
     show(2);
   });
 });
 
-// --- Étape 2 : les propositions ---
+// --- Étape 2 : visualiser les propositions et comprendre ---
+
+// La carte affichée : celle que le client regarde, sinon la référence déjà
+// choisie, sinon la meilleure proposition
+function viewed(): Proposition | undefined {
+  const propositions = state.project?.propositions ?? [];
+  const find = (id?: string | null) =>
+    propositions.find((proposition) => proposition.product.id === id);
+  return (
+    find(state.viewedId) ??
+    find(state.project?.selectedProductId) ??
+    propositions[0]
+  );
+}
 
 function renderPropositions() {
   const project = state.project!;
   const editable = isDraft();
+  const current = viewed();
+  state.viewedId = current?.product.id ?? null;
   const other: Universe =
     project.universe === 'flavor' ? 'fragrance' : 'flavor';
 
-  $('#brief-recap').replaceChildren(
-    h('p', { class: 'quote' }, `« ${project.brief} »`),
-    h(
-      'p',
-      { class: 'hint' },
-      `Parcours : ${UNIVERSE_LABELS[project.universe]}. `,
-      // L'univers déduit du brief reste visible et corrigeable (ADR 0010)
+  $('#brief-recap').textContent =
+    `Votre brief : ${project.brief} · ${project.propositions.length} références proposées`;
+
+  // L'univers déduit du brief reste visible et corrigeable (ADR 0010)
+  $('#universe-line').replaceChildren(
+    ...nodes([
+      `Parcours ${UNIVERSE_LABELS[project.universe]}. `,
       editable &&
         h(
           'button',
@@ -307,122 +343,136 @@ function renderPropositions() {
             type: 'button',
             class: 'link',
             click: (event: Event) =>
-              run(
-                event.currentTarget as HTMLButtonElement,
-                'Nouvelle recherche…',
-                async () => {
-                  state.project = await api<Project>(
-                    'POST',
-                    `/projects/${project.id}/propositions`,
-                    { brief: project.brief, universe: other },
-                  );
-                  show(2);
-                },
-              ),
+              run(clicked(event), 'Nouvelle recherche…', async () => {
+                state.project = await api<Project>(
+                  'POST',
+                  `/projects/${project.id}/propositions`,
+                  { brief: project.brief, universe: other },
+                );
+                state.viewedId = null;
+                show(2);
+              }),
           },
           `Mon projet concerne plutôt les ${UNIVERSE_LABELS[other].toLowerCase()}`,
         ),
-    ),
-    editable
-      ? h(
-          'button',
-          { type: 'button', class: 'secondary', click: () => show(1) },
-          'Modifier mon besoin',
-        )
-      : '',
+    ]),
   );
 
-  $('#propositions').replaceChildren(
+  $('#proposition-list').replaceChildren(
     ...project.propositions.map((proposition) =>
-      propositionCard(proposition, editable),
+      pickerItem(proposition, proposition === current),
+    ),
+  );
+  $('#proposition-detail').replaceChildren(
+    ...nodes(
+      current
+        ? propositionDetail(current, editable)
+        : [h('p', { class: 'hint' }, 'Aucune proposition pour ce brief.')],
     ),
   );
 
+  $('#edit-brief').hidden = !editable;
   const next = $<HTMLButtonElement>('#to-refine');
-  next.disabled = selected() === undefined;
-  next.textContent = selected()
-    ? `Affiner ${selected()!.product.name}`
-    : 'Choisissez une référence pour continuer';
+  next.disabled = !current || (!editable && !selected());
+  next.textContent = editable
+    ? 'Affiner cette proposition →'
+    : 'Voir le profil affiné →';
 }
 
-function propositionCard(proposition: Proposition, editable: boolean) {
-  const { product } = proposition;
-  const chosen = state.project!.selectedProductId === product.id;
+function pickerItem(proposition: Proposition, active: boolean) {
   return h(
-    'article',
-    { class: chosen ? 'card is-selected' : 'card' },
+    'li',
+    {},
+    h(
+      'button',
+      {
+        type: 'button',
+        class: active ? 'pick is-active' : 'pick',
+        'aria-pressed': String(active),
+        click: () => {
+          state.viewedId = proposition.product.id;
+          renderPropositions();
+        },
+      },
+      h('strong', { class: 'pick-name' }, productLabel(proposition)),
+      h('span', { class: 'pick-score' }, `${proposition.matchScore} % Match`),
+      h('span', { class: 'pick-summary' }, proposition.summary),
+      h(
+        'span',
+        { class: 'pick-cta' },
+        active ? 'Sélectionnée' : 'Voir le détail →',
+      ),
+    ),
+  );
+}
+
+function propositionDetail(
+  proposition: Proposition,
+  editable: boolean,
+): Child[] {
+  const { product } = proposition;
+  const chosen = state.project?.selectedProductId === product.id;
+  const eyebrow = editable
+    ? 'Référence sélectionnée'
+    : chosen
+      ? 'Référence retenue pour votre projet'
+      : 'Autre proposition';
+  return [
+    h('p', { class: 'eyebrow' }, eyebrow),
+    h('h2', { class: 'detail-name' }, productLabel(proposition)),
     h(
       'p',
-      { class: 'match' },
-      h('strong', {}, `${proposition.matchScore} %`),
-      ' de correspondance',
+      { class: 'detail-score' },
+      `${proposition.matchScore} % Match avec votre brief`,
     ),
-    h('span', {
-      class: 'meter',
-      style: `--value: ${proposition.matchScore}%`,
-      'aria-hidden': 'true',
-    }),
-    h('h2', {}, product.name),
-    h('p', { class: 'reference' }, product.reference),
-    h('p', { class: 'summary' }, proposition.summary),
     h(
       'ul',
-      { class: 'badges' },
+      { class: 'tags' },
       ...(product.badges ?? []).map((badge) => h('li', {}, badge)),
     ),
-    proposition.profileHighlight &&
-      h('p', { class: 'highlight' }, proposition.profileHighlight),
+    h('h3', {}, PROFILE_LABELS[product.universe]),
+    h(
+      'p',
+      { class: 'highlight' },
+      proposition.profileHighlight || product.profile,
+    ),
     proposition.glossary?.length
       ? h(
           'div',
-          { class: 'block' },
-          h('h3', {}, 'En clair'),
-          h(
-            'dl',
-            {},
-            ...proposition.glossary.flatMap((entry) => [
-              h('dt', {}, entry.term),
-              h('dd', {}, entry.plain),
-            ]),
+          { class: 'plain' },
+          ...proposition.glossary.map((entry) =>
+            h(
+              'div',
+              {},
+              h('p', { class: 'plain-term' }, `En clair : ${entry.term}`),
+              h('p', { class: 'hint' }, entry.plain),
+            ),
           ),
         )
       : null,
-    h(
-      'div',
-      { class: 'block' },
-      h('h3', {}, 'Pourquoi cette référence ?'),
-      h('p', {}, proposition.reason),
-    ),
-    editable
-      ? h(
-          'button',
-          {
-            type: 'button',
-            class: chosen ? 'primary' : 'secondary',
-            'aria-pressed': String(chosen),
-            click: (event: Event) =>
-              run(
-                event.currentTarget as HTMLButtonElement,
-                'Un instant…',
-                async () => {
-                  state.project = await api<Project>(
-                    'PATCH',
-                    `/projects/${state.project!.id}`,
-                    { selectedProductId: product.id },
-                  );
-                  renderPropositions();
-                },
-              ),
-          },
-          chosen ? 'Référence choisie' : 'Choisir cette référence',
-        )
-      : chosen && h('p', { class: 'chosen' }, 'Référence choisie'),
-  );
+    h('h3', {}, 'Pourquoi cette référence ?'),
+    h('p', { class: 'reason' }, proposition.reason),
+  ];
 }
 
-$('#to-refine').addEventListener('click', () => show(3));
+$('#edit-brief').addEventListener('click', () => show(1));
 
-// --- Étape 3 : l'affinage ---
+$<HTMLButtonElement>('#to-refine').addEventListener('click', (event) =>
+  run(clicked(event), 'Un instant…', async () => {
+    // Le choix n'est enregistré qu'ici, au passage à l'affinage
+    const id = state.viewedId;
+    if (isDraft() && id && id !== state.project!.selectedProductId) {
+      state.project = await api<Project>(
+        'PATCH',
+        `/projects/${state.project!.id}`,
+        { selectedProductId: id },
+      );
+    }
+    show(3);
+  }),
+);
+
+// --- Étape 3 : affiner après les propositions ---
 
 let adjustments: Required<Adjustments> = { ...DEFAULT_ADJUSTMENTS };
 let saveTimer: number | undefined;
@@ -437,49 +487,65 @@ function renderRefine() {
   const editable = adjustable();
   adjustments = { ...DEFAULT_ADJUSTMENTS, ...project.adjustments };
 
-  $('#refine-lead').textContent = editable
-    ? `Ajustez ${proposition.product.name} à votre projet : trois réglages, et vous voyez le résultat tout de suite.`
-    : `Les réglages de ${proposition.product.name} sont figés : la suite du projet est lancée.`;
-
-  $('#adjustments').replaceChildren(
-    ...SETTINGS.map((setting) =>
-      h(
-        'fieldset',
-        { disabled: !editable },
-        h('legend', {}, setting.title),
-        h(
-          'div',
-          { class: 'segments' },
-          ...setting.levels.map((level) =>
-            h(
-              'label',
-              {},
-              h('input', {
-                type: 'radio',
-                name: setting.key,
-                value: level.value,
-                checked: adjustments[setting.key] === level.value,
-              }),
-              h('span', {}, level.label),
-            ),
-          ),
-        ),
-      ),
-    ),
+  $('#refine-lead').textContent =
+    `Base sélectionnée : ${productLabel(proposition)} · ${project.name}`;
+  $('#refine-hint').textContent = editable
+    ? 'Faites glisser chaque curseur : trois niveaux par réglage.'
+    : 'La suite du projet est lancée : ces réglages sont figés.';
+  $('#sliders').replaceChildren(
+    ...SETTINGS.map((setting) => slider(setting, editable)),
   );
   $('#save-state').textContent = '';
   renderSynthesis();
 
-  const validate = $<HTMLButtonElement>('#validate-brief');
-  validate.textContent = isDraft() ? 'Valider mon brief' : 'Voir le suivi';
-  $('#back-to-propositions').hidden = !isDraft();
+  $('#validate-brief').textContent = isDraft()
+    ? 'Valider mon brief et suivre →'
+    : 'Voir le suivi →';
 }
 
-// La synthèse se calcule dans le navigateur, à chaque changement de réglage
+function slider(setting: Setting, editable: boolean) {
+  const index = levelIndex(setting, adjustments[setting.key]);
+  const id = `slider-${setting.key}`;
+  return h(
+    'div',
+    { class: 'slider' },
+    h(
+      'div',
+      { class: 'slider-head' },
+      h('label', { for: id }, setting.title),
+      h(
+        'output',
+        { for: id, id: `out-${setting.key}` },
+        setting.levels[index].label,
+      ),
+    ),
+    h('input', {
+      type: 'range',
+      id,
+      name: setting.key,
+      min: '0',
+      max: '2',
+      step: '1',
+      value: String(index),
+      disabled: !editable,
+      'aria-valuetext': setting.levels[index].label,
+      style: `--fill: ${index * 50}%`,
+    }),
+    h(
+      'div',
+      { class: 'slider-ends', 'aria-hidden': 'true' },
+      h('span', {}, setting.ends[0]),
+      h('span', {}, setting.ends[1]),
+    ),
+  );
+}
+
+// La synthèse se calcule dans le navigateur, à chaque mouvement de curseur
 function renderSynthesis() {
-  const { text, tags } = synthesis(selected()!.product, adjustments);
-  $('#synthesis-text').textContent = text;
-  $('#synthesis-tags').replaceChildren(...tags.map((tag) => h('li', {}, tag)));
+  $('#synthesis-base').textContent = `Base : ${productLabel(selected()!)}`;
+  $('#synthesis-lines').replaceChildren(
+    ...synthesisLines(adjustments).map((line) => h('li', {}, line)),
+  );
 }
 
 async function saveAdjustments() {
@@ -492,14 +558,21 @@ async function saveAdjustments() {
       adjustments,
     },
   );
-  $('#save-state').textContent = 'Réglages enregistrés.';
+  $('#save-state').textContent = 'Préférences enregistrées.';
 }
 
-$('#adjustments').addEventListener('change', (event) => {
+$('#sliders').addEventListener('input', (event) => {
   const input = event.target as HTMLInputElement;
-  adjustments = { ...adjustments, [input.name]: input.value };
+  const setting = SETTINGS.find((candidate) => candidate.key === input.name);
+  if (!setting) return;
+  const index = Number(input.value);
+  const level = setting.levels[index];
+  adjustments = { ...adjustments, [setting.key]: level.value };
+  input.setAttribute('aria-valuetext', level.label);
+  input.style.setProperty('--fill', `${index * 50}%`);
+  $(`#out-${setting.key}`).textContent = level.label;
   renderSynthesis();
-  // Enregistrement par PATCH, regroupé si le client clique vite
+  // Enregistrement par PATCH, regroupé pendant que le curseur bouge
   $('#save-state').textContent = 'Enregistrement…';
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => run(null, '', saveAdjustments), 400);
@@ -508,7 +581,7 @@ $('#adjustments').addEventListener('change', (event) => {
 $('#back-to-propositions').addEventListener('click', () => show(2));
 
 $<HTMLButtonElement>('#validate-brief').addEventListener('click', (event) =>
-  run(event.currentTarget as HTMLButtonElement, 'Validation…', async () => {
+  run(clicked(event), 'Validation…', async () => {
     if (saveTimer !== undefined) await saveAdjustments();
     if (isDraft()) {
       state.project = await api<Project>(
@@ -521,13 +594,60 @@ $<HTMLButtonElement>('#validate-brief').addEventListener('click', (event) =>
   }),
 );
 
-// --- Étape 4 : le suivi ---
+// --- Étape 4 : suivre sa demande ---
+
+function panelCopy(project: Project): { title: string; text: string } {
+  const delivery = project.estimatedDelivery
+    ? `Livraison estimée le ${formatDate(project.estimatedDelivery)}.`
+    : '';
+  switch (project.status) {
+    case 'draft':
+      return {
+        title: 'Brouillon',
+        text: 'Le suivi commence quand le brief est validé.',
+      };
+    case 'brief_validated':
+      return {
+        title: 'Brief validé · À vous de choisir la suite',
+        text: 'La préparation de votre échantillon démarrera après votre commande.',
+      };
+    case 'sample_preparing':
+      return {
+        title: 'Échantillon en préparation',
+        text: delivery || 'Nous préparons votre échantillon avec vos réglages.',
+      };
+    case 'shipped':
+      return {
+        title: 'Échantillon expédié',
+        text: delivery || 'Votre échantillon est en route.',
+      };
+    case 'testing':
+      return {
+        title: 'Test en cours',
+        text: "Testez l'échantillon dans votre produit, puis partagez votre retour.",
+      };
+    case 'expert_requested':
+      return {
+        title: 'Brief validé · Expert demandé',
+        text: 'Un expert Givaudan reprend votre brief et vous recontacte.',
+      };
+  }
+}
 
 // La frise : brief validé → échantillon en préparation → expédié → test en cours
 function timeline(status: Status) {
-  const reached = TIMELINE.indexOf(
-    status === 'expert_requested' ? 'brief_validated' : status,
-  );
+  const reached =
+    status === 'draft'
+      ? -1
+      : TIMELINE.findIndex(
+          (step) =>
+            step.status ===
+            (status === 'expert_requested' ? 'brief_validated' : status),
+        );
+  const stepState = (index: number, waiting: string) => {
+    if (index < reached || (index === 0 && reached === 0)) return 'Terminé';
+    return index === reached ? 'En cours' : waiting;
+  };
   return h(
     'ol',
     { class: 'timeline' },
@@ -535,99 +655,74 @@ function timeline(status: Status) {
       h(
         'li',
         {
-          class:
-            index < reached ? 'is-done' : index === reached ? 'is-current' : '',
+          class: index <= reached ? 'is-done' : '',
           'aria-current': index === reached ? 'step' : null,
         },
-        STATUS_LABELS[step],
+        h(
+          'span',
+          { class: 'timeline-num', 'aria-hidden': 'true' },
+          String(index + 1),
+        ),
+        h('strong', {}, step.label),
+        h('span', { class: 'hint' }, stepState(index, step.waiting)),
       ),
     ),
   );
 }
 
-function projectPanel(project: Project) {
-  const proposition = selected();
+function statusPanel(project: Project) {
+  const { title, text } = panelCopy(project);
   return h(
     'div',
-    { class: 'panel' },
-    h(
-      'p',
-      { class: 'panel-head' },
-      h('strong', {}, project.name),
-      h('span', { class: 'status' }, STATUS_LABELS[project.status]),
-    ),
-    proposition &&
-      h(
-        'p',
-        { class: 'hint' },
-        `${proposition.product.name} (${proposition.product.reference}) · ${UNIVERSE_LABELS[project.universe]}`,
-      ),
+    { class: 'box box-soft status-panel' },
+    h('h2', {}, title),
+    h('p', { class: 'hint' }, text),
     timeline(project.status),
-    project.status === 'expert_requested' &&
-      h('p', {}, 'Un expert Givaudan reprend votre brief et vous recontacte.'),
-    project.estimatedDelivery &&
-      h(
-        'p',
-        {},
-        `Livraison estimée de l'échantillon : ${formatDate(project.estimatedDelivery)}.`,
-      ),
   );
 }
+
+// Le bouton principal de la barre d'actions dépend du projet ouvert
+let trackingAction: () => void = () => undefined;
 
 function renderTracking() {
   const project = state.project;
-  const tracking = $('#tracking');
+  const proposition = selected();
+  $('#tracking-lead').textContent = project
+    ? [project.name, proposition && productLabel(proposition)]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Retrouvez ici tous vos projets enregistrés.';
+
+  $('#tracking').replaceChildren(
+    project
+      ? statusPanel(project)
+      : h(
+          'div',
+          { class: 'box box-soft' },
+          h(
+            'p',
+            {},
+            'Aucun projet ouvert. Choisissez un projet enregistré ou démarrez-en un nouveau.',
+          ),
+        ),
+  );
+
+  const action = $<HTMLButtonElement>('#tracking-action');
   if (!project) {
-    tracking.replaceChildren(
-      h(
-        'p',
-        { class: 'hint' },
-        'Aucun projet ouvert. Choisissez un projet enregistré ou démarrez-en un nouveau.',
-      ),
-    );
+    action.textContent = 'Démarrer un projet →';
+    trackingAction = startNewProject;
   } else if (project.status === 'draft') {
-    tracking.replaceChildren(
-      h(
-        'div',
-        { class: 'panel' },
-        h(
-          'p',
-          { class: 'panel-head' },
-          h('strong', {}, project.name),
-          h('span', { class: 'status' }, STATUS_LABELS.draft),
-        ),
-        h(
-          'p',
-          {},
-          'Ce projet est encore un brouillon : le suivi commence quand le brief est validé.',
-        ),
-        h(
-          'button',
-          {
-            type: 'button',
-            class: 'primary',
-            click: () => show(selected() ? 3 : 2),
-          },
-          'Reprendre ce brouillon',
-        ),
-      ),
-    );
+    action.textContent = 'Reprendre ce brouillon →';
+    trackingAction = () => show(proposition ? 3 : 2);
   } else {
-    tracking.replaceChildren(
-      projectPanel(project),
-      h(
-        'div',
-        { class: 'actions' },
-        h(
-          'button',
-          { type: 'button', class: 'primary', click: () => show(5) },
-          project.status === 'brief_validated'
-            ? 'Choisir la suite : échantillon ou expert'
-            : 'Voir ma demande',
-        ),
-      ),
-    );
+    action.textContent =
+      project.status === 'brief_validated'
+        ? 'Choisir la prochaine étape →'
+        : 'Voir ma demande →';
+    trackingAction = () => show(5);
   }
+  $('#back-to-refine').hidden = !proposition;
+
   renderProjectList();
   // La liste est relue à chaque affichage : elle ne contient que les projets
   // du client de la session, le filtrage est fait par l'API.
@@ -640,50 +735,74 @@ function renderTracking() {
 }
 
 function renderProjectList() {
-  $('#project-list').replaceChildren(
-    ...state.projects.map((summary) =>
+  const rows = state.projects.map((summary) => {
+    const open = summary.id === state.project?.id;
+    return h(
+      'tr',
+      { class: open ? 'is-open' : '' },
       h(
-        'li',
-        {},
+        'th',
+        { scope: 'row' },
+        h('span', { class: 'project-name' }, summary.name),
         h(
-          'button',
-          {
-            type: 'button',
-            class: summary.id === state.project?.id ? 'is-open' : '',
-            click: () => openProject(summary.id),
-          },
-          h('strong', {}, summary.name),
-          h('span', { class: 'status' }, STATUS_LABELS[summary.status]),
-          h(
-            'span',
-            { class: 'hint' },
-            `Mis à jour le ${formatDate(summary.updatedAt)}`,
-          ),
+          'span',
+          { class: 'updated' },
+          `Mis à jour le ${formatDate(summary.updatedAt)}`,
         ),
       ),
-    ),
-  );
-  if (state.projects.length === 0) {
-    $('#project-list').append(
-      h('li', { class: 'hint' }, 'Aucun projet enregistré pour le moment.'),
+      h('td', { class: 'hint' }, STATUS_LABELS[summary.status]),
+      h(
+        'td',
+        {},
+        open
+          ? h('strong', {}, 'Projet ouvert')
+          : h(
+              'button',
+              {
+                type: 'button',
+                class: 'link-strong',
+                'aria-label': `Ouvrir ${summary.name}`,
+                click: () => openProject(summary.id),
+              },
+              'Ouvrir →',
+            ),
+      ),
     );
-  }
+  });
+  $('#project-list').replaceChildren(
+    ...(rows.length > 0
+      ? rows
+      : [
+          h(
+            'tr',
+            {},
+            h(
+              'td',
+              { colspan: '3', class: 'hint' },
+              'Aucun projet enregistré pour le moment.',
+            ),
+          ),
+        ]),
+  );
 }
 
 function openProject(id: string) {
   run(null, '', async () => {
     state.project = await api<Project>('GET', `/projects/${id}`);
+    state.viewedId = null;
     show(isDraft() ? (selected() ? 3 : 2) : 4);
   });
 }
 
+$('#tracking-action').addEventListener('click', () => trackingAction());
+$('#back-to-refine').addEventListener('click', () => show(3));
 $('#new-project').addEventListener('click', startNewProject);
 
-// --- Étape 5 : échantillon gratuit ou expert ---
+// --- Étape 5 : recevoir un échantillon ou contacter un expert ---
 
 function chooseNextStep(choice: 'sample' | 'expert', busyLabel: string) {
   return (event: Event) =>
-    run(event.currentTarget as HTMLButtonElement, busyLabel, async () => {
+    run(clicked(event), busyLabel, async () => {
       state.project = await api<Project>(
         'POST',
         `/projects/${state.project!.id}/next-step`,
@@ -696,86 +815,99 @@ function chooseNextStep(choice: 'sample' | 'expert', busyLabel: string) {
 
 function renderNextStep() {
   const project = state.project!;
-  const product = selected()?.product;
-  const sampleButton = h(
-    'button',
-    {
-      type: 'button',
-      class: 'primary',
-      click: chooseNextStep('sample', 'Commande en cours…'),
-    },
-    'Commander mon échantillon gratuit',
-  );
+  const proposition = selected();
 
-  if (project.status === 'brief_validated') {
-    $('#next-step').replaceChildren(
-      h(
-        'p',
-        { class: 'lead' },
-        `Votre brief est validé${product ? ` pour ${product.name}` : ''}. Choisissez la suite.`,
-      ),
-      h(
-        'div',
-        { class: 'choices' },
-        h(
-          'article',
-          { class: 'card' },
-          h('h2', {}, 'Recevoir un échantillon gratuit'),
-          h(
-            'p',
-            {},
-            'Nous préparons un échantillon avec vos réglages. Vous le testez dans votre produit avant toute commande.',
-          ),
-          sampleButton,
-        ),
-        h(
-          'article',
-          { class: 'card' },
-          h('h2', {}, 'Parler à un expert'),
-          h(
-            'p',
-            {},
-            product?.badges?.includes('Diffusion restreinte')
-              ? 'Cette référence est en diffusion restreinte : un expert confirme avec vous son éligibilité et affine le brief.'
-              : 'Un doute sur la référence ou les réglages ? Un expert reprend votre brief avec vous.',
-          ),
-          h(
-            'button',
-            {
-              type: 'button',
-              class: 'secondary',
-              click: chooseNextStep('expert', 'Demande en cours…'),
-            },
-            'Demander un expert',
-          ),
-        ),
-      ),
-    );
-    return;
-  }
-
-  const expert = project.status === 'expert_requested';
-  $('#next-step').replaceChildren(
+  const recap = h(
+    'div',
+    { class: 'box box-soft recap' },
+    h('strong', {}, project.name),
     h(
       'p',
-      { class: 'lead' },
-      expert
-        ? 'Votre demande est transmise à un expert.'
-        : 'Votre échantillon gratuit est commandé.',
-    ),
-    projectPanel(project),
-    h(
-      'div',
-      { class: 'actions' },
-      h(
-        'button',
-        { type: 'button', class: 'secondary', click: () => show(4) },
-        'Voir mes projets',
-      ),
-      expert && sampleButton,
+      { class: 'hint' },
+      [
+        proposition && productLabel(proposition),
+        STATUS_LABELS[project.status],
+        project.adjustments && "Préférences définies à l'étape d'affinage",
+      ]
+        .filter(Boolean)
+        .join(' · '),
     ),
   );
+
+  const sampleCard = h(
+    'article',
+    { class: 'box choice' },
+    h('p', { class: 'eyebrow' }, '01 / Tester'),
+    h('h2', {}, 'Recevoir mon échantillon'),
+    h(
+      'p',
+      { class: 'hint' },
+      'Évaluez la proposition dans votre application et partagez votre retour depuis le suivi.',
+    ),
+    h('p', { class: 'choice-note' }, 'Échantillon gratuit · Sans engagement'),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'primary wide',
+        click: chooseNextStep('sample', 'Commande en cours…'),
+      },
+      'Commander mon échantillon gratuit',
+    ),
+  );
+
+  const restricted =
+    proposition?.product.badges?.includes('Diffusion restreinte') ?? false;
+  const expertCard = h(
+    'article',
+    { class: 'box choice' },
+    h('p', { class: 'eyebrow' }, '02 / Être accompagné'),
+    h('h2', {}, 'Échanger avec un expert'),
+    h(
+      'p',
+      { class: 'hint' },
+      restricted
+        ? 'Cette référence est en diffusion restreinte : un spécialiste confirme son éligibilité et vous aide à préciser le profil.'
+        : 'Un spécialiste vous aide à préciser le profil et à comprendre les contraintes techniques.',
+    ),
+    h('p', { class: 'choice-note' }, 'Votre brief sera joint à la demande'),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'primary wide',
+        click: chooseNextStep('expert', 'Demande en cours…'),
+      },
+      "Demander l'avis d'un expert Givaudan",
+    ),
+  );
+
+  const lead = $('#next-lead');
+  const footnote = $('#next-footnote');
+  if (project.status === 'brief_validated') {
+    lead.textContent = 'Choisissez le parcours le plus adapté à votre projet.';
+    footnote.hidden = false;
+    $('#next-step').replaceChildren(
+      recap,
+      h('div', { class: 'choices' }, sampleCard, expertCard),
+    );
+  } else if (project.status === 'expert_requested') {
+    // Commander l'échantillon reste possible après avoir demandé un expert
+    lead.textContent = 'Votre demande est transmise à un expert Givaudan.';
+    footnote.hidden = false;
+    $('#next-step').replaceChildren(
+      recap,
+      statusPanel(project),
+      h('div', { class: 'choices' }, sampleCard),
+    );
+  } else {
+    lead.textContent = 'Votre échantillon gratuit est commandé.';
+    footnote.hidden = true;
+    $('#next-step').replaceChildren(recap, statusPanel(project));
+  }
 }
+
+$('#back-to-tracking').addEventListener('click', () => show(4));
 
 // SIMULATION DE DÉMO : le prototype n'a pas de logistique. Après « Commander
 // mon échantillon gratuit », l'API fait passer le projet à « expédié » au bout
