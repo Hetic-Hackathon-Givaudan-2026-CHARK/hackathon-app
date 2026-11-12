@@ -5,8 +5,8 @@ info:
   description: >
     Contrat d'API du prototype (thématique 2), aligné sur les wireframes Figma
     « Maquettes Givaudan G10 » (5 étapes : besoin, propositions, affinage,
-    suivi, échantillon ou expert). Les routes marquées « à construire » ne sont
-    pas encore implémentées. Voir docs/adr/0005-contrat-api-openapi-first.md.
+    suivi, échantillon ou expert). Toutes les routes sont
+    implémentées dans api/src/. Voir docs/adr/0005-contrat-api-openapi-first.md.
 servers:
   - url: http://localhost:3000
 security:
@@ -32,7 +32,7 @@ paths:
                     enum: [ok, indisponible]
   /api/session:
     post:
-      summary: Ouvre une session pour un compte de démo (à construire, ADR 0011)
+      summary: Ouvre une session pour un compte de démo (ADR 0011)
       security: []
       requestBody:
         required: true
@@ -49,13 +49,13 @@ paths:
         '400':
           description: Compte inconnu
     delete:
-      summary: Ferme la session (à construire)
+      summary: Ferme la session
       responses:
         '204':
           description: Session fermée
   /api/me:
     get:
-      summary: Renvoie le client connecté (à construire)
+      summary: Renvoie le client connecté
       responses:
         '200':
           description: Client connecté
@@ -66,7 +66,7 @@ paths:
           description: Pas de session
   /api/projects:
     get:
-      summary: Liste les projets du client connecté (écran 4, « Mes projets enregistrés », à construire)
+      summary: Liste les projets du client connecté (écran 4, « Mes projets enregistrés »)
       responses:
         '200':
           description: Projets du client, du plus récent au plus ancien
@@ -78,7 +78,7 @@ paths:
         '401':
           description: Pas de session
     post:
-      summary: Crée un projet à partir d'un brief et renvoie les propositions (écrans 1 → 2, à construire)
+      summary: Crée un projet à partir d'un brief et renvoie les propositions (écrans 1 → 2)
       description: >
         L'API interroge le service Data (ADR 0008), puis le LLM (ADR 0009), qui
         détecte l'univers, choisit au plus 3 références du catalogue et explique
@@ -106,7 +106,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
     get:
-      summary: Renvoie un projet du client connecté (à construire)
+      summary: Renvoie un projet du client connecté
       responses:
         '200':
           description: Projet
@@ -118,7 +118,7 @@ paths:
         '404':
           description: Projet inconnu pour ce client
     patch:
-      summary: Choisit la référence, enregistre les réglages et valide le brief (écrans 2 → 3 → 4, à construire)
+      summary: Choisit la référence, enregistre les réglages et valide le brief (écrans 2 → 3 → 4)
       requestBody:
         required: true
         content:
@@ -140,7 +140,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
     post:
-      summary: Relance les propositions après « Modifier mon besoin » (écran 2, à construire)
+      summary: Relance les propositions après « Modifier mon besoin » (écran 2)
       requestBody:
         required: true
         content:
@@ -162,7 +162,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
     post:
-      summary: Commande l'échantillon gratuit ou demande un expert (écran 5, à construire)
+      summary: Commande l'échantillon gratuit ou demande un expert (écran 5)
       requestBody:
         required: true
         content:

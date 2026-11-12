@@ -4,8 +4,9 @@ import express, {
   type Request,
   type Response,
 } from 'express';
+import { warmUpAssistant } from './assistant.js';
 import { config } from './config.js';
-import { dataStatus } from './data.js';
+import { dataStatus, warmUpData } from './data.js';
 import { db } from './db.js';
 import { projects } from './projects.js';
 import {
@@ -71,6 +72,10 @@ app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
 });
 
 // Sans adresse, Node écoute sur toutes les interfaces : joignable hors du conteneur
-app.listen(config.port, () =>
-  console.log(`API sur http://localhost:${config.port}`),
-);
+app.listen(config.port, () => {
+  console.log(`API sur http://localhost:${config.port}`);
+  // Chauffe du service Data et d'Ollama, sans retarder le démarrage : le
+  // premier brief de la démo ne paie plus leur chargement à froid.
+  void warmUpData();
+  void warmUpAssistant();
+});
