@@ -1,7 +1,7 @@
 # Hackathon App
 
 Environnement de développement prêt pour la production basé sur les Dev Containers VS Code.  
-Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17 et un assistant IA (API cloud compatible `/chat/completions`, voir [ADR 0006](./docs/adr/0006-fournisseur-ia-assistant-de-commande.md) ; la démo actuelle tourne encore sur Ollama en local).
+Stack full-stack : Node 24, Express (TypeScript), Vite + Vanilla/TS, PostgreSQL 17, un assistant IA (Mistral Small via l'API compatible `/chat/completions`, [ADR 0009](./docs/adr/0009-fournisseur-llm-mistral.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md).
 
 Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
@@ -14,11 +14,8 @@ Avant de démarrer, installez sur votre machine hôte :
 - **Git**
 - **Docker Desktop** (lancé et en cours d'exécution)
 - **Visual Studio Code** avec l'extension **[Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)**
-- **Ollama** (pour l'IA en local) :
-  ```bash
-  # Télécharger et démarrer le modèle requis
-  ollama run llama3.2:1b
-  ```
+- Une **clé d'API Mistral** à copier dans `api/.env` (`AI_API_KEY`), et l'URL du service Data (`DATA_API_URL`) fournie par l'équipe Data.
+- Facultatif, en repli hors ligne : **Ollama** avec `ollama run llama3.2:1b`.
 
 ---
 
