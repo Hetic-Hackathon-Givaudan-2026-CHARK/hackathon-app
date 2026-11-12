@@ -1,12 +1,15 @@
-// Les propositions de l'écran 2. Pour l'instant elles sont figées : trois
-// références du catalogue de l'univers, sans appel au LLM.
+// Les propositions de l'écran 2 : service Data, puis assistant, avec un repli
+// sur des propositions figées pour que la démo tourne sans réseau (ADR 0012).
+import { askAssistant, validatePropositions } from './assistant.js';
 import {
   defaultProposition,
   type Product,
   type StoredProposition,
   type Universe,
 } from './catalogue.js';
+import { searchData } from './data.js';
 import { db } from './db.js';
+import type { Client } from './session.js';
 
 // ADR 0010 : on ne lit jamais le catalogue sans préciser l'univers
 export async function loadCatalogue(universe: Universe): Promise<Product[]> {
@@ -59,11 +62,55 @@ export function guessUniverse(brief: string): Universe {
   return fragrance > flavor ? 'fragrance' : 'flavor';
 }
 
+// 1. Le service Data cherche les passages utiles (déjà filtrés pour le client).
+// 2. L'assistant choisit 3 références dans le catalogue d'UN univers.
+// 3. Une réponse invalide (référence hors catalogue, carte incomplète) est
+//    relancée une fois ; ensuite, ou si l'assistant est injoignable, on sert
+//    les propositions figées.
 export async function buildPropositions(
+  client: Client,
   brief: string,
   forcedUniverse?: Universe,
 ): Promise<{ universe: Universe; propositions: StoredProposition[] }> {
-  const universe = forcedUniverse ?? guessUniverse(brief);
-  const catalogue = await loadCatalogue(universe);
+  let universe = forcedUniverse ?? guessUniverse(brief);
+  let catalogue = await loadCatalogue(universe);
+  const passages = await searchData(brief, client.id);
+
+  let switched = false;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const result = await askAssistant({
+      brief,
+      universe,
+      catalogue,
+      passages,
+      client,
+    });
+    if (!result.ok) {
+      if (!result.retry) break;
+      continue;
+    }
+    // L'assistant lit mieux le brief que nos mots-clés : s'il annonce l'autre
+    // univers, on repart une fois avec le prompt et le catalogue de celui-ci.
+    const detected = result.answer.universe;
+    if (!forcedUniverse && !switched && detected && detected !== universe) {
+      universe = detected;
+      catalogue = await loadCatalogue(universe);
+      switched = true;
+      attempt--;
+      continue;
+    }
+    const propositions = validatePropositions(
+      result.answer.propositions,
+      catalogue,
+    );
+    if (propositions) {
+      console.log(
+        `Propositions de l'assistant (${universe}, essai ${attempt})`,
+      );
+      return { universe, propositions };
+    }
+    console.warn(`Réponse de l'assistant rejetée (essai ${attempt})`);
+  }
+  console.warn(`Propositions figées (${universe})`);
   return { universe, propositions: frozenPropositions(universe, catalogue) };
 }

@@ -4,6 +4,7 @@ import express, {
   type Response,
 } from 'express';
 import { config } from './config.js';
+import { dataStatus } from './data.js';
 import { db } from './db.js';
 import { projects } from './projects.js';
 import {
@@ -19,8 +20,11 @@ app.use(express.json());
 // --- Routes publiques ---
 
 app.get('/api/health', async (_req, res) => {
-  const { rows } = await db.query('SELECT version()');
-  res.json({ status: 'ok', db: rows[0].version });
+  const [{ rows }, data] = await Promise.all([
+    db.query('SELECT version()'),
+    dataStatus(),
+  ]);
+  res.json({ status: 'ok', db: rows[0].version, data });
 });
 
 app.post('/api/session', async (req, res) => {

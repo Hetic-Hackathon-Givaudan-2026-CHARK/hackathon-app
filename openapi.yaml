@@ -82,7 +82,9 @@ paths:
       description: >
         L'API interroge le service Data (ADR 0008), puis le LLM (ADR 0009), qui
         détecte l'univers, choisit au plus 3 références du catalogue et explique
-        son choix. Seules les références existantes sont renvoyées.
+        son choix. Seules les références existantes sont renvoyées. Si le LLM
+        échoue, l'API renvoie 3 références figées du catalogue de l'univers
+        (ADR 0012).
       requestBody:
         required: true
         content:
@@ -99,7 +101,7 @@ paths:
         '401':
           description: Pas de session
         '502':
-          description: Le LLM n'a pas renvoyé de réponse exploitable
+          description: Aucune proposition exploitable (LLM en échec et catalogue de l'univers vide)
   /api/projects/{id}:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
