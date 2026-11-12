@@ -36,4 +36,5 @@ Nous choisissons l'option 1, en n'utilisant que la recherche :
 
 - Positives : aucune dépendance de build entre les dépôts ; la démo survit à une coupure du tunnel ; chaque équipe garde son outillage.
 - Négatives, à accepter : une copie du contrat à tenir à jour ; latence réseau supplémentaire ; l'URL ngrok doit être recopiée dans `.env` à chaque redémarrage du tunnel.
+- Constat du 2026-11-12 sur la version 2.0.0 du service Data : la condition ci-dessous n'est pas encore remplie, la décision ne change pas. Le champ `domain` (`fragrance`, `dairy_aroma`, `all`) ne sépare que leurs nouveaux documents : nos fiches, commandes et clients sont étiquetés `shared` et reviennent avec n'importe quel filtre. Il n'y a toujours pas de filtre par client. La route `GET /orders/{order_id}` repose sur un autre jeu de données (`CMD-…`, `DEMO-CUST-…`) et renvoie une commande à quiconque connaît son numéro : l'écran 4 ne l'utilise pas.
 - À revoir si : le service Data est hébergé à une adresse stable, ou s'il renvoie les métadonnées (`document_type`, `client_id`, `product_id`, `domain`) et accepte un filtre par client : le filtrage sur le texte serait alors supprimé.
