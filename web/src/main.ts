@@ -1,35 +1,12 @@
-type Question = { id: number; question: string; answer: string };
-
+// Les écrans du parcours (connexion puis 5 étapes) arrivent avec la branche
+// feature/front-parcours : en attendant, on vérifie seulement que l'API répond.
 const health = document.querySelector('#health')!;
-const form = document.querySelector('form')!;
-const list = document.querySelector('#questions')!;
 
-async function refresh() {
-  const status = await fetch('/api/health').then((r) => r.json());
-  health.textContent = `API OK · ${status.db}`;
-
-  const questions: Question[] = await fetch('/api/questions').then((r) =>
-    r.json(),
-  );
-  list.replaceChildren(
-    ...questions.map((q) => {
-      const item = document.createElement('li');
-      item.textContent = `${q.question} → ${q.answer}`;
-      return item;
-    }),
-  );
-}
-
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const question = new FormData(form).get('question');
-  await fetch('/api/questions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+fetch('/api/health')
+  .then((response) => response.json())
+  .then((status) => {
+    health.textContent = `API OK · ${status.db}`;
+  })
+  .catch(() => {
+    health.textContent = 'API injoignable';
   });
-  form.reset();
-  await refresh();
-});
-
-refresh();
