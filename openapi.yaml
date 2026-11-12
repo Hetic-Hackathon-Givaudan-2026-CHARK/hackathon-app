@@ -150,6 +150,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
+        '400':
+          description: Brief manquant, ou brief déjà validé
         '401':
           description: Pas de session
         '404':
