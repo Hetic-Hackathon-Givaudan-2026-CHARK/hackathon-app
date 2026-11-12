@@ -1,6 +1,8 @@
 // Les propositions de l'écran 2 : service Data, puis assistant, avec un repli
 // sur des propositions figées pour que la démo tourne sans réseau (ADR 0012).
 import { askAssistant, validatePropositions } from './assistant.js';
+// Les propositions de l'écran 2. Pour l'instant elles sont figées : trois
+// références du catalogue de l'univers, sans appel au LLM.
 import {
   defaultProposition,
   type Product,
@@ -10,6 +12,7 @@ import {
 import { searchData } from './data.js';
 import { db } from './db.js';
 import type { Client } from './session.js';
+import { db } from './db.js';
 
 // ADR 0010 : on ne lit jamais le catalogue sans préciser l'univers
 export async function loadCatalogue(universe: Universe): Promise<Product[]> {
@@ -112,5 +115,11 @@ export async function buildPropositions(
     console.warn(`Réponse de l'assistant rejetée (essai ${attempt})`);
   }
   console.warn(`Propositions figées (${universe})`);
+export async function buildPropositions(
+  brief: string,
+  forcedUniverse?: Universe,
+): Promise<{ universe: Universe; propositions: StoredProposition[] }> {
+  const universe = forcedUniverse ?? guessUniverse(brief);
+  const catalogue = await loadCatalogue(universe);
   return { universe, propositions: frozenPropositions(universe, catalogue) };
 }
