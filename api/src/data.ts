@@ -92,3 +92,28 @@ export async function dataStatus(): Promise<'ok' | 'indisponible'> {
     return 'indisponible';
   }
 }
+
+// Au démarrage de l'API : la première recherche charge le modèle d'embeddings
+// du service Data et dépasse souvent DATA_API_TIMEOUT_MS (12 s mesurées à
+// froid, 3 s ensuite). On la paie ici plutôt que sur le premier brief du
+// client. Le délai reste celui de l'ADR 0008 : si l'appel est coupé, le
+// service finit quand même de charger son modèle.
+export async function warmUpData(): Promise<void> {
+  if (!config.dataApiUrl) return;
+  const started = Date.now();
+  try {
+    const response = await fetch(`${config.dataApiUrl}/search`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ question: 'arôme vanille', top_k: 1 }),
+      signal: AbortSignal.timeout(config.dataApiTimeoutMs),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
+    console.log(`Service Data prêt (${seconds} s)`);
+  } catch (error) {
+    console.warn(
+      `Service Data pas encore prêt : ${(error as Error).message}. Le classement se fera sur les mots du brief tant qu'il ne répond pas.`,
+    );
+  }
+}

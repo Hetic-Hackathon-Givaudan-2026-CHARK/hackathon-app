@@ -670,14 +670,31 @@ function timeline(status: Status) {
   );
 }
 
+// Ce qui est simulé se dit à l'écran, pas seulement dans le README : le
+// prototype n'a ni logistique ni file d'attente d'experts.
+function simulationNote(status: Status): string | null {
+  switch (status) {
+    case 'sample_preparing':
+    case 'shipped':
+    case 'testing':
+      return "Démonstration : la préparation et l'expédition sont simulées, aucun colis ne part.";
+    case 'expert_requested':
+      return "Démonstration : la demande est enregistrée, mais aucun expert n'est prévenu.";
+    default:
+      return null;
+  }
+}
+
 function statusPanel(project: Project) {
   const { title, text } = panelCopy(project);
+  const note = simulationNote(project.status);
   return h(
     'div',
     { class: 'box box-soft status-panel' },
     h('h2', {}, title),
     h('p', { class: 'hint' }, text),
     timeline(project.status),
+    note ? h('p', { class: 'hint simulation-note' }, note) : null,
   );
 }
 

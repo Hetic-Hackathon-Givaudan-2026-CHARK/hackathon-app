@@ -110,6 +110,12 @@ button:disabled {
   color: var(--muted);
 }
 
+/* Ce qui est simulé dans la démo, dit à l'écran */
+.simulation-note {
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
 .label {
   font-weight: 600;
   font-size: 0.95rem;

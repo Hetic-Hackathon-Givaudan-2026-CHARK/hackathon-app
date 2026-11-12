@@ -28,6 +28,8 @@ export type AssistantResult =
   // `retry` : une nouvelle tentative a-t-elle une chance d'aboutir ?
   | { ok: false; retry: boolean };
 
+// Sans les badges : `llama3.2:1b` recopiait le dernier champ de la ligne
+// (« Approuvé, 3 marchés ») en guise d'explication, et la phrase était rejetée.
 const productLine = (product: Product) =>
   [
     product.id,
@@ -35,7 +37,6 @@ const productLine = (product: Product) =>
     product.family,
     product.profile,
     product.application,
-    product.badges.join(', '),
   ].join(' | ');
 
 const text = (value: unknown) =>
@@ -153,4 +154,34 @@ export function readReasons(content: string, products: Product[]) {
     reasons.set(id, reason.slice(0, 400));
   });
   return reasons;
+}
+
+// Au démarrage de l'API : Ollama charge le modèle en mémoire à la première
+// demande (13 s mesurées à froid, 5 s ensuite). Une demande d'un mot suffit.
+export async function warmUpAssistant(): Promise<void> {
+  const { aiBaseUrl, aiModel, aiApiKey, aiTimeoutMs } = config;
+  if (!aiBaseUrl || !aiModel) return;
+  const started = Date.now();
+  try {
+    const response = await fetch(`${aiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${aiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: aiModel,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Bonjour' }],
+      }),
+      signal: AbortSignal.timeout(aiTimeoutMs),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
+    console.log(`Assistant prêt (${aiModel}, ${seconds} s)`);
+  } catch (error) {
+    console.warn(
+      `Assistant pas prêt : ${(error as Error).message}. Les explications viendront des fiches.`,
+    );
+  }
 }

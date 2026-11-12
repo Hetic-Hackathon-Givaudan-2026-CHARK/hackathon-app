@@ -97,6 +97,8 @@ Pour montrer le cloisonnement ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-clo
 
 La recherche sémantique du service Data et les mots du brief classent les références de l'univers ; le LLM local rédige seulement « Pourquoi cette référence ? » pour les 3 premières ([ADR 0013](./docs/adr/0013-assistant-local-ollama.md)). Sur un poste sans GPU, comptez de 10 à 30 s après « Voir mes propositions ».
 
+Au démarrage, l'API envoie une première demande au service Data et à Ollama pour qu'ils chargent leurs modèles : le journal affiche `Service Data prêt` et `Assistant prêt`. Attendez ces deux lignes avant de commencer une démo, sinon le premier brief paie ce chargement (12 s mesurées côté Data, plus que `DATA_API_TIMEOUT_MS`).
+
 ### Si Ollama ou le service Data ne répondent pas
 
 La démo continue ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)) :
@@ -108,7 +110,8 @@ Le journal de l'API indique `Assistant : N/3 explications` ou `Explications tir�
 
 ### Ce qui est simulé
 
-- **L'expédition** : après « Commander mon échantillon gratuit », le projet passe à « Expédié » au bout de quelques secondes (`DEMO_SHIPPING_DELAY_MS`). Il n'y a pas de logistique derrière.
+- **L'expédition** : après « Commander mon échantillon gratuit », le projet passe à « Expédié » au bout de quelques secondes (`DEMO_SHIPPING_DELAY_MS`). Il n'y a pas de logistique derrière. L'écran le dit sous la frise.
+- **La demande d'expert** : le projet passe à « Expert demandé », mais personne n'est prévenu. L'écran le dit aussi.
 - **La connexion** : deux comptes de démo sans mot de passe (Léa, Marc). Le cloisonnement, lui, est réel : chaque requête SQL filtre par client ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-cloisonnement.md)).
 - **Les données** : clients, produits et commandes fictifs, générés à partir des CSV de l'équipe Data.
 - **L'envoi d'un brief PDF** : le bouton est affiché mais désactivé.
