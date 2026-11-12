@@ -23,3 +23,4 @@ Nous choisissons l'option 2 pour le prototype : une API cloud d'un modèle front
 - Positives : choix fondé sur un essai ; changement de fournisseur sans toucher au code.
 - Négatives, à accepter : budget d'appels à prévoir ; aucune donnée réelle client dans le prototype.
 - À revoir si : le spike montre qu'un modèle local suffit, ou si Givaudan exige un hébergement en Europe. Cet ADR remplace [0003](0003-fournisseur-ia-ollama.md).
+- Précisé par : [0009](0009-fournisseur-llm-mistral.md) (choix du fournisseur : Mistral).
