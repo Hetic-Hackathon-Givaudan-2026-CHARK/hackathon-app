@@ -14,6 +14,7 @@ const SYNONYMS: Record<string, string[]> = {
   flora: ['rose', 'pivoine'],
   fleur: ['rose', 'pivoine', 'floral'],
   musqu: ['musc'],
+  douce: ['doux'],
   gourm: ['vanille', 'amande', 'biscuit'],
   fruit: ['fruite', 'mangue', 'fraise', 'framboise'],
   tropi: ['mangue', 'passion'],
@@ -56,20 +57,21 @@ export const stems = (text: string): string[] =>
     .filter((word) => word.length >= 4 && !STOPWORDS.has(word))
     .map((word) => word.slice(0, 5));
 
+// Un mot du brief retrouvé dans le goût ou l'odeur (nom, famille, profil)
+// compte double par rapport à l'application : « vanille » départage mieux que
+// « boisson », présent dans presque toutes les fiches arômes.
 function wordScore(brief: string, product: Product): number {
-  const sheet = new Set(
-    stems(
-      [product.name, product.family, product.profile, product.application].join(
-        ' ',
-      ),
-    ),
+  const sensory = new Set(
+    stems([product.name, product.family, product.profile].join(' ')),
   );
-  let hits = 0;
+  const usage = new Set(stems(product.application));
+  let score = 0;
   for (const stem of new Set(stems(brief))) {
     const related = [stem, ...(SYNONYMS[stem] ?? []).flatMap(stems)];
-    if (related.some((candidate) => sheet.has(candidate))) hits++;
+    if (related.some((candidate) => sensory.has(candidate))) score += 2;
+    else if (related.some((candidate) => usage.has(candidate))) score += 1;
   }
-  return hits;
+  return score;
 }
 
 // Ordre d'apparition des fiches produit dans les passages du service Data,
@@ -98,7 +100,7 @@ export function rankCatalogue(
       const base = rank === -1 ? 62 : (RANK_BONUS[rank] ?? 66);
       return {
         product,
-        matchScore: Math.min(98, base + 4 * wordScore(brief, product)),
+        matchScore: Math.min(98, base + 3 * wordScore(brief, product)),
       };
     })
     .sort((a, b) => b.matchScore - a.matchScore);

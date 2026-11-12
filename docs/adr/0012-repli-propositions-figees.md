@@ -1,6 +1,6 @@
 # 0012. Quand le LLM échoue, l'API sert quand même 3 références, avec le texte de leur fiche
 
-- Statut : proposée
+- Statut : acceptée
 - Date : 2026-11-12
 - Décideurs : Bryan (tech)
 
