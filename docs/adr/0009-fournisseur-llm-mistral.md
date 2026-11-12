@@ -1,6 +1,6 @@
 # 0009. Le LLM de l'assistant est Mistral Small, avec une réponse en JSON
 
-- Statut : acceptée
+- Statut : remplacée par [0013](0013-assistant-local-ollama.md)
 - Date : 2026-11-12
 - Décideurs : Bryan (tech)
 

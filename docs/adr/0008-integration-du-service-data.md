@@ -25,7 +25,7 @@ Constats du 2026-11-12 en appelant le service (embeddings `qwen3-embedding:4b`, 
 
 Nous choisissons l'option 1, en n'utilisant que la recherche :
 
-- L'API appelle `POST {DATA_API_URL}/search` pour récupérer les passages pertinents (fiches produit, historique, documents), puis passe ces passages au LLM de [0009](0009-fournisseur-llm-mistral.md), qui rédige la réponse.
+- L'API appelle `POST {DATA_API_URL}/search` pour récupérer les passages pertinents (fiches produit, historique, documents), puis passe ces passages au LLM de [0009](0009-fournisseur-llm-mistral.md) (remplacé par [0013](0013-assistant-local-ollama.md), qui utilise aussi leur ordre pour classer les références), qui rédige la réponse.
 - `DATA_API_URL` est une variable d'environnement dans `api/.env`. Chaque appel envoie l'en-tête `ngrok-skip-browser-warning: true`, sinon ngrok renvoie sa page d'avertissement au lieu du JSON.
 - Délai maximal de 8 s par appel. En cas d'échec, l'assistant répond quand même à partir du catalogue PostgreSQL seul, et `/api/health` indique `data: "indisponible"`.
 - Le contrat du service Data est copié dans [`docs/contrats/data-api.openapi.json`](../contrats/data-api.openapi.json) et mis à jour à chaque changement côté Data.

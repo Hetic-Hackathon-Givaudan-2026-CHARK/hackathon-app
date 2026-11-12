@@ -1,82 +1,80 @@
-// L'assistant (ADR 0009) : Mistral via l'API compatible /chat/completions,
-// réponse en JSON. Il reçoit un prompt système propre à l'univers et seulement
-// le catalogue de cet univers (ADR 0010), plus les passages du service Data
-// déjà filtrés pour le client connecté (ADR 0008 et 0011).
-import {
-  defaultProposition,
-  UNIVERSES,
-  type GlossaryEntry,
-  type Product,
-  type StoredProposition,
-  type Universe,
-} from './catalogue.js';
+// L'assistant (ADR 0013) : un modèle local servi par Ollama, appelé par l'API
+// compatible /chat/completions, réponse en JSON.
+//
+// Un petit modèle (1 à 3 milliards de paramètres) classe mal les références,
+// répond lentement et recopie souvent le gabarit qu'on lui donne. Le
+// classement vient donc de ranking.ts ; le modèle rédige seulement le bloc
+// « Pourquoi cette référence ? » des 3 cartes, à partir du brief, des fiches
+// et de l'historique du client connecté (ADR 0008 et 0011). Il reçoit un
+// prompt système propre à l'univers et seulement des références de cet univers
+// (ADR 0010).
+import type { Product, Universe } from './catalogue.js';
 import { config } from './config.js';
+import { stems } from './ranking.js';
 import type { Client } from './session.js';
 
 const UNIVERSE_PROMPTS: Record<Universe, string> = {
-  flavor: `Tu es l'assistant de commande de Givaudan pour les ARÔMES alimentaires (flavors).
-Vocabulaire : note aromatique, profil, base d'application (boisson, base protéinée, laitier), stabilité, sans sucre ajouté, arôme naturel ou nature-identique.
-Points à vérifier dans le brief : l'application, le profil de goût recherché, les contraintes (sucre, acidité, naturalité) et le marché visé.
-Réglementation : tu ne garantis jamais une conformité. Si une référence est en « Diffusion restreinte », dis-le et recommande l'avis d'un expert.`,
-  fragrance: `Tu es l'assistant de commande de Givaudan pour les PARFUMS (fragrances).
-Vocabulaire : notes de tête, de cœur et de fond, famille olfactive, application (savon, gel douche, bougie), tenue.
-Points à vérifier dans le brief : l'application, l'ambiance olfactive recherchée, le positionnement (premium, naturel) et le marché visé.
-Réglementation : tu ne garantis jamais une conformité (allergènes, marchés). Si une référence est en « Diffusion restreinte », dis-le et recommande l'avis d'un expert.`,
+  flavor:
+    "Tu es l'assistant de commande de Givaudan pour les ARÔMES alimentaires. Tu parles du goût, de l'application (boisson, base protéinée…) et des contraintes (sucre, acidité, naturalité).",
+  fragrance:
+    "Tu es l'assistant de commande de Givaudan pour les PARFUMS. Tu parles de l'ambiance olfactive, de l'application (savon, gel douche…) et du positionnement (premium, naturel).",
 };
 
-const COMMON_PROMPT = `Tu t'adresses à une petite entreprise qui n'est pas experte : vouvoie le client, écris en français simple et explique chaque terme technique.
-Tu choisis exactement 3 références dans le catalogue fourni, de la plus adaptée à la moins adaptée. Tu n'inventes jamais de référence : chaque "productId" doit être un "id" du catalogue fourni.
-Tu peux t'appuyer sur les passages du service Data (fiches, historique du client). Tu ne cites jamais un autre client.
-Si le brief relève clairement de l'autre univers (parfums ou arômes), renvoie seulement l'autre valeur dans "universe" et un tableau "propositions" vide.
+const COMMON_PROMPT = `Pour chaque référence fournie, écris une phrase en français simple, au vouvoiement, qui explique au client pourquoi elle répond à son brief. Appuie-toi sur le profil et l'application de la référence. N'invente aucune information. Ne garantis jamais une conformité réglementaire.
+Réponds uniquement en JSON, avec les identifiants fournis, dans le même ordre.`;
 
-Réponds uniquement avec un objet JSON de cette forme :
-{
-  "universe": "flavor" ou "fragrance",
-  "propositions": [
-    {
-      "productId": "PR-000",
-      "matchScore": entier de 0 à 100, adéquation avec le brief,
-      "summary": "famille · impression en quelques mots",
-      "profileHighlight": "le profil en une phrase courte",
-      "glossary": [{ "term": "terme technique utilisé", "plain": "son explication en une phrase simple" }],
-      "reason": "deux phrases au plus : pourquoi cette référence répond au brief"
-    }
-  ]
-}`;
-
-export type AssistantAnswer = { universe?: Universe; propositions: unknown[] };
-
-// `retry` : une nouvelle tentative a-t-elle une chance d'aboutir ?
 export type AssistantResult =
-  { ok: true; answer: AssistantAnswer } | { ok: false; retry: boolean };
+  | { ok: true; reasons: Map<string, string> }
+  // `retry` : une nouvelle tentative a-t-elle une chance d'aboutir ?
+  | { ok: false; retry: boolean };
+
+const productLine = (product: Product) =>
+  [
+    product.id,
+    product.name,
+    product.family,
+    product.profile,
+    product.application,
+    product.badges.join(', '),
+  ].join(' | ');
+
+const text = (value: unknown) =>
+  typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+// Une phrase qui recopie la consigne, reste vide ou ne dit rien ne vaut rien
+const PLACEHOLDER =
+  /^\.*$|une phrase|en français simple|pourquoi elle répond|deux phrases|terme technique|^\.\.\./i;
 
 export async function askAssistant(input: {
   brief: string;
   universe: Universe;
-  catalogue: Product[];
-  passages: string[];
+  products: Product[];
+  history: string[];
   client: Client;
+  timeoutMs: number;
 }): Promise<AssistantResult> {
   const { aiBaseUrl, aiModel, aiApiKey } = config;
   if (!aiBaseUrl || !aiModel) return { ok: false, retry: false };
 
-  // Les fiches produit de l'autre univers ne sont pas transmises
-  const ids = new Set(input.catalogue.map((product) => product.id));
-  const passages = input.passages.filter(
-    (passage) =>
-      !/PRODUIT \|/.test(passage) ||
-      (passage.match(/PR-\d+/g) ?? []).every((id) => ids.has(id)),
-  );
-
+  // L'exemple porte les vrais identifiants : le modèle n'a qu'à remplir
+  const shape = JSON.stringify({
+    reasons: input.products.map((product) => ({
+      productId: product.id,
+      reason: '',
+    })),
+  });
   const user = [
     `Client : ${input.client.company}`,
-    `Brief : """${input.brief}"""`,
-    `Catalogue (${input.universe}) :`,
-    ...input.catalogue.map((product) => JSON.stringify(product)),
-    passages.length > 0
-      ? `Passages du service Data :\n${passages.map((p) => `- ${p.slice(0, 700)}`).join('\n')}`
-      : 'Passages du service Data : aucun (service indisponible).',
-  ].join('\n');
+    `Brief : "${input.brief}"`,
+    'Références :',
+    ...input.products.map(productLine),
+    input.history.length > 0
+      ? `Historique du client :\n${input.history.map((h) => `- ${h}`).join('\n')}`
+      : '',
+    `Format : ${shape}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   try {
     const response = await fetch(`${aiBaseUrl}/chat/completions`, {
@@ -88,90 +86,71 @@ export async function askAssistant(input: {
       body: JSON.stringify({
         model: aiModel,
         temperature: 0.3,
+        max_tokens: 350,
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
-            content: `${UNIVERSE_PROMPTS[input.universe]}\n\n${COMMON_PROMPT}`,
+            content: `${UNIVERSE_PROMPTS[input.universe]}\n${COMMON_PROMPT}`,
           },
           { role: 'user', content: user },
         ],
       }),
-      signal: AbortSignal.timeout(config.aiTimeoutMs),
+      signal: AbortSignal.timeout(input.timeoutMs),
     });
     if (!response.ok) {
       console.warn(`Assistant : HTTP ${response.status}`);
-      // Clé refusée : inutile d'insister
-      return { ok: false, retry: ![401, 403].includes(response.status) };
+      // Modèle absent ou clé refusée : inutile d'insister
+      return { ok: false, retry: ![401, 403, 404].includes(response.status) };
     }
     const data = await response.json();
-    const answer = JSON.parse(data.choices[0].message.content);
-    return {
-      ok: true,
-      answer: {
-        universe: UNIVERSES.includes(answer?.universe)
-          ? answer.universe
-          : undefined,
-        propositions: Array.isArray(answer?.propositions)
-          ? answer.propositions
-          : [],
-      },
-    };
+    const content = String(data?.choices?.[0]?.message?.content ?? '');
+    // AI_DEBUG=1 dans api/.env : affiche la réponse brute pour régler le prompt
+    if (config.aiDebug) console.log(`Assistant, réponse brute : ${content}`);
+    return { ok: true, reasons: readReasons(content, input.products) };
   } catch (error) {
     const { name, message } = error as Error;
     console.warn(`Assistant : ${name} ${message}`);
-    // Délai dépassé ou réseau coupé : on ne fait pas attendre le client deux
-    // fois. Un JSON illisible, lui, mérite une seconde chance.
-    return { ok: false, retry: name === 'SyntaxError' || name === 'TypeError' };
+    // Délai dépassé ou Ollama injoignable : on ne fait pas attendre le client
+    // deux fois. Une réponse HTTP illisible, elle, mérite une seconde chance.
+    return { ok: false, retry: name === 'SyntaxError' };
   }
 }
 
-const text = (value: unknown) =>
-  typeof value === 'string' ? value.trim() : '';
-
-// Valide la réponse du LLM : une référence absente du catalogue de l'univers,
-// en double, ou une carte incomplète invalide toute la réponse.
-export function validatePropositions(
-  raw: unknown[],
-  catalogue: Product[],
-): StoredProposition[] | undefined {
-  const expected = Math.min(3, catalogue.length);
-  const ids = new Set(catalogue.map((product) => product.id));
-  const seen = new Set<string>();
-  const propositions: StoredProposition[] = [];
-
-  for (const entry of raw.slice(0, 3)) {
-    const item = (entry ?? {}) as Record<string, unknown>;
-    const productId = text(item.productId);
-    const score = Number(item.matchScore);
-    const summary = text(item.summary);
-    const reason = text(item.reason);
-    if (!ids.has(productId) || seen.has(productId)) return undefined;
-    if (!Number.isFinite(score) || !summary || !reason) return undefined;
-    seen.add(productId);
-
-    const glossary: GlossaryEntry[] = (
-      Array.isArray(item.glossary) ? item.glossary : []
-    )
-      .map((entry) => ({ term: text(entry?.term), plain: text(entry?.plain) }))
-      .filter((entry) => entry.term && entry.plain)
-      .slice(0, 3);
-
-    // Profil ou « En clair » absents : on reprend le texte par défaut de la fiche
-    const fallback = defaultProposition(
-      catalogue.find((product) => product.id === productId)!,
-      score,
+// Ne garde que les phrases utiles, rattachées à une référence demandée.
+// Un petit modèle coupe ou abîme souvent son JSON : si l'analyse échoue, on
+// récupère les paires productId / reason complètes directement dans le texte.
+export function readReasons(content: string, products: Product[]) {
+  const ids = products.map((product) => product.id);
+  let entries: unknown[] = [];
+  try {
+    const list = (JSON.parse(content) as { reasons?: unknown })?.reasons;
+    if (Array.isArray(list)) entries = list;
+  } catch {
+    const pairs = content.matchAll(
+      /"productId"\s*:\s*"(PR-\d+)"\s*,\s*"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/g,
     );
-    propositions.push({
+    entries = [...pairs].map(([, productId, reason]) => ({
       productId,
-      matchScore: Math.max(0, Math.min(100, Math.round(score))),
-      summary,
-      profileHighlight:
-        text(item.profileHighlight) || fallback.profileHighlight,
-      glossary: glossary.length > 0 ? glossary : fallback.glossary,
-      reason,
-    });
+      reason: reason.replace(/\\(.)/g, '$1'),
+    }));
   }
-  if (propositions.length !== expected || expected === 0) return undefined;
-  return propositions.sort((a, b) => b.matchScore - a.matchScore);
+
+  const reasons = new Map<string, string>();
+  entries.forEach((entry, index) => {
+    const item = (entry ?? {}) as Record<string, unknown>;
+    // Un identifiant inconnu ou absent : on se fie à l'ordre demandé
+    const id = ids.includes(text(item.productId))
+      ? text(item.productId)
+      : ids[index];
+    const reason = text(item.reason);
+    if (!id || reasons.has(id)) return;
+    if (reason.length < 40 || PLACEHOLDER.test(reason)) return;
+    // La phrase doit parler de cette référence : son nom ou son profil
+    const product = products.find((candidate) => candidate.id === id);
+    const sheet = new Set(stems(`${product?.name} ${product?.profile}`));
+    if (!stems(reason).some((stem) => sheet.has(stem))) return;
+    reasons.set(id, reason.slice(0, 400));
+  });
+  return reasons;
 }

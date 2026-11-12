@@ -1,4 +1,4 @@
-# 0012. Quand le LLM échoue, l'API sert des propositions figées du catalogue
+# 0012. Quand le LLM échoue, l'API sert quand même 3 références, avec le texte de leur fiche
 
 - Statut : proposée
 - Date : 2026-11-12
@@ -12,20 +12,18 @@
 
 1. **Message d'excuse sans suggestion (0009 tel quel) :** honnête, mais le parcours est bloqué dès qu'un appel échoue.
 2. **Propositions figées (retenue) :** après l'échec, l'API renvoie 3 références du catalogue de l'univers du brief, avec un texte construit à partir de la fiche produit. Le parcours continue.
-3. **Repli sur un modèle local (Ollama) :** déjà possible par configuration, mais `llama3.2:1b` dépasse 45 s sur un poste de l'équipe et sa sortie JSON n'est pas fiable.
+3. **Relancer le LLM jusqu'à obtenir une réponse :** plus de chances d'avoir un texte rédigé, mais une attente sans limite sur un modèle local lent.
 
 ## Décision
 
-Nous choisissons l'option 2. Elle amende 0009 sur un seul point (le comportement après échec) ; le fournisseur, le modèle et la sortie JSON ne changent pas.
+Nous choisissons l'option 2. Elle amende 0009 sur un seul point (le comportement après échec). Depuis [0013](0013-assistant-local-ollama.md), le classement ne dépend plus du LLM : le repli porte seulement sur les textes.
 
-- Le format validé est celui du contrat v0.2 : `universe` et 3 `propositions` (`productId`, `matchScore`, `summary`, `profileHighlight`, `glossary`, `reason`), à la place de `reply` et `suggestions`.
-- Une réponse est rejetée en entier si une référence est absente du catalogue de l'univers, en double, ou si une carte est incomplète. Elle est relancée une fois.
-- Après le second échec, ou tout de suite si le LLM est injoignable (délai `AI_TIMEOUT_MS` dépassé, clé refusée, pas de configuration), l'API sert les propositions figées de `api/src/propositions.ts`. L'univers vient alors de `BriefRequest.universe` ou de mots-clés du brief.
-- Les propositions figées respectent [0010](0010-parcours-parfums-et-aromes.md) : elles ne sortent jamais du catalogue de l'univers.
-- Le journal de l'API indique la source (`Propositions de l'assistant` ou `Propositions figées`).
+- Les 3 références viennent toujours du classement de 0013 (recherche Data, puis mots du brief), dans le catalogue de l'univers du projet ([0010](0010-parcours-parfums-et-aromes.md)).
+- Une carte sans explication valable du LLM, ou toutes les cartes si le LLM est injoignable (délai `AI_TIMEOUT_MS` dépassé, modèle absent, pas de configuration), gardent un texte tiré de leur fiche.
+- Le journal de l'API indique la source (`Assistant : N/3 explications` ou `Explications tirées des fiches`).
 
 ## Conséquences
 
-- Positives : la démo tourne sans réseau ; le parcours n'a qu'un seul chemin côté front.
-- Négatives, à accepter : en repli, les 3 références ne dépendent pas du brief et l'interface ne le signale pas ; le code 502 du contrat ne sert plus que si le catalogue de l'univers est vide.
-- À revoir si : le prototype est testé par de vrais clients. Il faudrait alors afficher que les propositions sont génériques, ou revenir au message d'excuse.
+- Positives : la démo tourne sans Ollama ni réseau ; les références restent pertinentes même en repli ; le parcours n'a qu'un seul chemin côté front.
+- Négatives, à accepter : en repli, le bloc « Pourquoi cette référence ? » est générique et l'interface ne le signale pas ; le code 502 du contrat ne sert plus que si le catalogue de l'univers est vide.
+- À revoir si : le prototype est testé par de vrais clients. Il faudrait alors signaler à l'écran qu'une explication est générique.

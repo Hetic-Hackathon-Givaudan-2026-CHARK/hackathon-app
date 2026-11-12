@@ -1,14 +1,17 @@
-// Les propositions de l'écran 2 : service Data, puis assistant, avec un repli
-// sur des propositions figées pour que la démo tourne sans réseau (ADR 0012).
-import { askAssistant, validatePropositions } from './assistant.js';
+// Les propositions de l'écran 2 : service Data, classement, puis explications
+// du LLM local, avec un repli sur les textes des fiches pour que la démo tourne
+// sans Ollama ni réseau (ADR 0012 et 0013).
+import { askAssistant } from './assistant.js';
 import {
   defaultProposition,
   type Product,
   type StoredProposition,
   type Universe,
 } from './catalogue.js';
+import { config } from './config.js';
 import { searchData } from './data.js';
 import { db } from './db.js';
+import { rankCatalogue } from './ranking.js';
 import type { Client } from './session.js';
 
 // ADR 0010 : on ne lit jamais le catalogue sans préciser l'univers
@@ -21,36 +24,7 @@ export async function loadCatalogue(universe: Universe): Promise<Product[]> {
   return rows;
 }
 
-// Références et scores figés par univers. Si une référence a disparu du
-// catalogue, on complète avec les premières références de l'univers.
-const FROZEN: Record<Universe, [string, number][]> = {
-  flavor: [
-    ['PR-007', 92],
-    ['PR-005', 84],
-    ['PR-006', 73],
-  ],
-  fragrance: [
-    ['PR-001', 91],
-    ['PR-004', 82],
-    ['PR-003', 74],
-  ],
-};
-
-export function frozenPropositions(
-  universe: Universe,
-  catalogue: Product[],
-): StoredProposition[] {
-  const wanted = FROZEN[universe].map(([id]) => id);
-  const products = [
-    ...wanted.flatMap((id) => catalogue.filter((p) => p.id === id)),
-    ...catalogue.filter((p) => !wanted.includes(p.id)),
-  ].slice(0, 3);
-  return products.map((product, i) =>
-    defaultProposition(product, FROZEN[universe][i][1]),
-  );
-}
-
-// Sans LLM, l'univers se déduit de quelques mots du brief. À égalité : arômes.
+// L'univers se déduit de quelques mots du brief. À égalité : arômes.
 const FRAGRANCE_WORDS =
   /parfum|senteur|savon|gel douche|bougie|cosm[ée]ti|shampo|lessive|cr[èe]me|d[ée]odorant|fragrance|odeur|lotion/gi;
 const FLAVOR_WORDS =
@@ -62,55 +36,82 @@ export function guessUniverse(brief: string): Universe {
   return fragrance > flavor ? 'fragrance' : 'flavor';
 }
 
+// Commandes et échantillons du client (déjà filtrés par data.ts) qui portent
+// sur l'une des références proposées : de quoi personnaliser l'explication
+function historyFor(passages: string[], ids: string[]): string[] {
+  return passages
+    .filter((passage) => /COMMANDE \||ÉCHANTILLON \|/.test(passage))
+    .filter((passage) => ids.some((id) => passage.includes(`(${id})`)))
+    .map((passage) =>
+      passage
+        .replace(/^Chapter[^\n]*\n/, '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 220),
+    )
+    .slice(0, 2);
+}
+
 // 1. Le service Data cherche les passages utiles (déjà filtrés pour le client).
-// 2. L'assistant choisit 3 références dans le catalogue d'UN univers.
-// 3. Une réponse invalide (référence hors catalogue, carte incomplète) est
-//    relancée une fois ; ensuite, ou si l'assistant est injoignable, on sert
-//    les propositions figées.
+// 2. ranking.ts classe le catalogue de l'univers : ordre de la recherche Data,
+//    puis mots du brief. L'univers vient du client (BriefRequest.universe) ou
+//    des mots du brief ; le client peut le corriger à l'écran 2 (ADR 0010).
+// 3. Le LLM local rédige « Pourquoi cette référence ? » pour les 3 premières
+//    (ADR 0013). Une réponse inexploitable est relancée une fois si le temps
+//    le permet ; sinon, ou si Ollama est injoignable, chaque carte garde un
+//    texte tiré de sa fiche (ADR 0012). AI_TIMEOUT_MS borne l'attente totale.
 export async function buildPropositions(
   client: Client,
   brief: string,
   forcedUniverse?: Universe,
 ): Promise<{ universe: Universe; propositions: StoredProposition[] }> {
-  let universe = forcedUniverse ?? guessUniverse(brief);
-  let catalogue = await loadCatalogue(universe);
+  const universe = forcedUniverse ?? guessUniverse(brief);
+  const catalogue = await loadCatalogue(universe);
   const passages = await searchData(brief, client.id);
+  const ranked = rankCatalogue(brief, catalogue, passages).slice(0, 3);
+  const products = ranked.map(({ product }) => product);
 
-  let switched = false;
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  let reasons = new Map<string, string>();
+  const deadline = Date.now() + config.aiTimeoutMs;
+  for (let attempt = 1; attempt <= 2 && products.length > 0; attempt++) {
+    const timeoutMs = deadline - Date.now();
+    // Moins de 5 s : une seconde réponse n'arriverait pas à temps
+    if (attempt > 1 && timeoutMs < 5000) break;
+    const started = Date.now();
     const result = await askAssistant({
       brief,
       universe,
-      catalogue,
-      passages,
+      products,
+      history: historyFor(
+        passages,
+        products.map((product) => product.id),
+      ),
       client,
+      timeoutMs,
     });
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
     if (!result.ok) {
       if (!result.retry) break;
       continue;
     }
-    // L'assistant lit mieux le brief que nos mots-clés : s'il annonce l'autre
-    // univers, on repart une fois avec le prompt et le catalogue de celui-ci.
-    const detected = result.answer.universe;
-    if (!forcedUniverse && !switched && detected && detected !== universe) {
-      universe = detected;
-      catalogue = await loadCatalogue(universe);
-      switched = true;
-      attempt--;
-      continue;
-    }
-    const propositions = validatePropositions(
-      result.answer.propositions,
-      catalogue,
-    );
-    if (propositions) {
+    reasons = result.reasons;
+    if (reasons.size > 0) {
       console.log(
-        `Propositions de l'assistant (${universe}, essai ${attempt})`,
+        `Assistant : ${reasons.size}/${products.length} explications (${universe}, essai ${attempt}, ${seconds} s)`,
       );
-      return { universe, propositions };
+      break;
     }
-    console.warn(`Réponse de l'assistant rejetée (essai ${attempt})`);
+    console.warn(
+      `Réponse de l'assistant rejetée (essai ${attempt}, ${seconds} s)`,
+    );
   }
-  console.warn(`Propositions figées (${universe})`);
-  return { universe, propositions: frozenPropositions(universe, catalogue) };
+  if (reasons.size === 0) {
+    console.warn(`Explications tirées des fiches (${universe})`);
+  }
+
+  return {
+    universe,
+    propositions: ranked.map(({ product, matchScore }) =>
+      defaultProposition(product, matchScore, reasons.get(product.id)),
+    ),
+  };
 }

@@ -2,7 +2,7 @@
 
 Prototype de commande accompagnée pour les petites entreprises clientes de Givaudan (thématique 2) : le client décrit son besoin avec ses mots, reçoit trois références expliquées simplement, affine le profil, suit son projet, puis commande un échantillon gratuit ou demande un expert.
 
-Stack : Node 24, Express 5 (TypeScript), Vite + TypeScript sans framework, PostgreSQL 17, un assistant IA (Mistral Small via l'API compatible `/chat/completions`, [ADR 0009](./docs/adr/0009-fournisseur-llm-mistral.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md). Contrat d'API : [`openapi.yaml`](./openapi.yaml).
+Stack : Node 24, Express 5 (TypeScript), Vite + TypeScript sans framework, PostgreSQL 17, un assistant IA local (Ollama et `llama3.2:1b` via l'API compatible `/chat/completions`, [ADR 0013](./docs/adr/0013-assistant-local-ollama.md)) et le service RAG de l'équipe Data appelé par l'API ([ADR 0008](./docs/adr/0008-integration-du-service-data.md)). Architecture du prototype : [ADR 0007](./docs/adr/0007-architecture-du-prototype.md). Contrat d'API : [`openapi.yaml`](./openapi.yaml).
 
 Pour le détail et la justification des choix techniques, consultez le registre d'architecture : [docs/adr/](./docs/adr/).
 
@@ -13,7 +13,10 @@ Pour le détail et la justification des choix techniques, consultez le registre 
 - **Git**
 - **Docker Desktop** (lancé et en cours d'exécution)
 - **Visual Studio Code** avec l'extension **[Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)**
-- Une **clé d'API Mistral** (https://console.mistral.ai) et l'**URL ngrok du service Data**, fournie par l'équipe Data. Sans elles, le prototype tourne quand même avec des propositions figées (voir la section 4).
+- **[Ollama](https://ollama.com)** sur la machine hôte, avec le modèle de l'assistant : `ollama pull llama3.2:1b`. Le conteneur l'appelle par `host.docker.internal:11434`.
+- L'**URL ngrok du service Data**, fournie par l'équipe Data.
+
+Sans Ollama ni service Data, le prototype tourne quand même (voir la section 4).
 
 ---
 
@@ -36,16 +39,16 @@ Tout se fait dans le dev container, jamais sur l'hôte Windows.
 
 Le fichier n'est jamais commité. Les valeurs par défaut sont dans [`api/.env.example`](./api/.env.example).
 
-| Variable                 | Rôle                                                                                         | Valeur pour la démo              |
-| ------------------------ | -------------------------------------------------------------------------------------------- | -------------------------------- |
-| `DATABASE_URL`           | Connexion PostgreSQL                                                                         | `postgres://app:app@db:5432/app` |
-| `AI_BASE_URL`            | API compatible `/chat/completions`                                                           | `https://api.mistral.ai/v1`      |
-| `AI_MODEL`               | Modèle de l'assistant                                                                        | `mistral-small-latest`           |
-| `AI_API_KEY`             | Clé Mistral                                                                                  | votre clé                        |
-| `AI_TIMEOUT_MS`          | Délai maximal d'un appel au LLM, avant le repli sur les propositions figées                  | `15000`                          |
-| `DATA_API_URL`           | URL ngrok du service Data, à recopier à chaque redémarrage du tunnel                         | fournie par l'équipe Data        |
-| `DATA_API_TIMEOUT_MS`    | Délai maximal d'un appel au service Data                                                     | `8000`                           |
-| `DEMO_SHIPPING_DELAY_MS` | Simulation de démo : délai avant qu'un échantillon commandé passe à « expédié » (0 = jamais) | `6000`                           |
+| Variable                 | Rôle                                                                                            | Valeur pour la démo                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `DATABASE_URL`           | Connexion PostgreSQL                                                                            | `postgres://app:app@db:5432/app`       |
+| `AI_BASE_URL`            | API compatible `/chat/completions` : Ollama sur l'hôte                                          | `http://host.docker.internal:11434/v1` |
+| `AI_MODEL`               | Modèle de l'assistant                                                                           | `llama3.2:1b`                          |
+| `AI_API_KEY`             | Inutile avec Ollama                                                                             | vide                                   |
+| `AI_TIMEOUT_MS`          | Attente maximale du LLM, relance comprise, avant le repli sur les textes des fiches             | `30000`                                |
+| `DATA_API_URL`           | URL ngrok du service Data, sans `/docs` ni `/` final, à recopier à chaque redémarrage du tunnel | fournie par l'équipe Data              |
+| `DATA_API_TIMEOUT_MS`    | Délai maximal d'un appel au service Data                                                        | `8000`                                 |
+| `DEMO_SHIPPING_DELAY_MS` | Simulation de démo : délai avant qu'un échantillon commandé passe à « expédié » (0 = jamais)    | `6000`                                 |
 
 Le service Data vit dans un dépôt séparé : [Hetic-Hackathon-Givaudan-2026-CHARK/equipe10](https://github.com/Hetic-Hackathon-Givaudan-2026-CHARK/equipe10). Son contrat est copié dans [`docs/contrats/data-api.openapi.json`](./docs/contrats/data-api.openapi.json).
 
@@ -76,9 +79,18 @@ Sous Windows, les changements de fichiers ne sont pas toujours détectés dans l
 
 Pour montrer le cloisonnement ([ADR 0011](./docs/adr/0011-comptes-de-demo-et-cloisonnement.md)) : **Changer de compte**, puis **Continuer en tant que Marc** (Maison Éclat, `CL-001`). Sa liste de projets est différente, et aucun projet de Léa n'est accessible.
 
-### Si Mistral ou le service Data ne répondent pas
+### Comment l'assistant choisit et explique
 
-La démo continue : l'API sert trois références figées du catalogue ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)). Le journal de l'API indique `Propositions de l'assistant` ou `Propositions figées`, et `/api/health` renvoie `data: "ok"` ou `"indisponible"`. Pour un repli immédiat, sans attendre `AI_TIMEOUT_MS`, videz `AI_BASE_URL`.
+La recherche sémantique du service Data et les mots du brief classent les références de l'univers ; le LLM local rédige seulement « Pourquoi cette référence ? » pour les 3 premières ([ADR 0013](./docs/adr/0013-assistant-local-ollama.md)). Sur un poste sans GPU, comptez de 10 à 30 s après « Voir mes propositions ».
+
+### Si Ollama ou le service Data ne répondent pas
+
+La démo continue ([ADR 0012](./docs/adr/0012-repli-propositions-figees.md)) :
+
+- sans Ollama, les 3 références restent classées et chaque carte garde un texte tiré de sa fiche ;
+- sans service Data, le classement repose sur les mots du brief.
+
+Le journal de l'API indique `Assistant : N/3 explications` ou `Explications tirées des fiches`, et `/api/health` renvoie `data: "ok"` ou `"indisponible"`. Pour ne pas attendre `AI_TIMEOUT_MS` quand Ollama est arrêté, videz `AI_BASE_URL`.
 
 ### Données de test
 
