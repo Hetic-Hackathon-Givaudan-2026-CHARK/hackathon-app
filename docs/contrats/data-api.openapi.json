@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Intelligent Ordering Platform RAG API",
-    "description": "API RAG de démonstration permettant de rechercher des informations sur des clients, produits, commandes, matières premières et échantillons synthétiques.",
-    "version": "1.0.0"
+    "description": "API RAG de démonstration pour les parfums, les arômes destinés aux produits laitiers, les processus de commande et le suivi de commande.",
+    "version": "2.0.0"
   },
   "paths": {
     "/health": {
@@ -133,6 +133,49 @@
           }
         }
       }
+    },
+    "/orders/{order_id}": {
+      "get": {
+        "tags": ["Suivi des commandes"],
+        "summary": "Get Order",
+        "description": "Retourne une commande de démonstration à partir du CSV de suivi.\n\nPour le prototype, les données sont fictives et lues depuis un CSV.\nDans une version réelle, cet endpoint devra être connecté à un système\nde commandes sécurisé et contrôlé par authentification.",
+        "operationId": "get_order_orders__order_id__get",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Order Orders  Order Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -144,8 +187,16 @@
             "minLength": 1,
             "title": "Question",
             "examples": [
-              "Quel produit NutriPeak Foods a-t-il recommandé en février 2025 ?"
+              "Je veux commander un parfum floral. Comment puis-je le personnaliser ?"
             ]
+          },
+          "domain": {
+            "type": "string",
+            "enum": ["fragrance", "dairy_aroma", "all"],
+            "title": "Domain",
+            "description": "Domaine choisi dans l'application : fragrance, dairy_aroma, ou all pour une recherche globale.",
+            "default": "all",
+            "examples": ["fragrance"]
           },
           "top_k": {
             "type": "integer",
@@ -166,6 +217,10 @@
             "type": "string",
             "title": "Question"
           },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
           "answer": {
             "type": "string",
             "title": "Answer"
@@ -183,7 +238,7 @@
           }
         },
         "type": "object",
-        "required": ["question", "answer", "model", "sources"],
+        "required": ["question", "domain", "answer", "model", "sources"],
         "title": "AskResponse"
       },
       "HTTPValidationError": {
@@ -209,6 +264,10 @@
             "type": "string",
             "title": "Document Type"
           },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
           "text": {
             "type": "string",
             "title": "Text"
@@ -220,7 +279,7 @@
           }
         },
         "type": "object",
-        "required": ["section", "document_type", "text", "score"],
+        "required": ["section", "document_type", "domain", "text", "score"],
         "title": "Source"
       },
       "ValidationError": {
